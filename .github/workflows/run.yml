@@ -23,8 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip }
-      - run: pip install -r requirements-gh.txt
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-gh.txt || pip install numpy lightgbm scipy lhafile
       - run: npm ci
       - run: npm run build
       - run: VITE_STATIC=1 npx vite build --outDir /tmp/site --emptyOutDir
