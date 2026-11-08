@@ -441,7 +441,7 @@ function DoneRow({ h }: { h: PlanItem }) {
         <span className="ml-auto flex items-center gap-1.5 text-xs">
           {r?.finished ? (<>
             <ComboView combo={r.trifecta!} small />
-            <span className={cn("num font-semibold", hit ? "text-[hsl(var(--chart-2))]" : "text-muted-foreground")}>{hit ? `的中 ${r.trifectaPay?.toLocaleString()}円` : "不的中"}</span>
+            <span className={cn("num font-semibold", hit ? "text-[hsl(var(--chart-2))]" : "text-muted-foreground")}>{hit ? `的中 ${((r.trifectaPay ?? 0) * 10).toLocaleString()}円` : "不的中"}</span>
           </>) : <span className="text-muted-foreground">結果待ち</span>}
         </span>
       </div>
@@ -453,9 +453,11 @@ function DoneRow({ h }: { h: PlanItem }) {
 type RecDay = { hd: string; n: number; hit: number; inv: number; ret: number };
 type RecOut = { from: string | null; days: RecDay[]; total: { n: number; hit: number; inv: number; ret: number }; pending: number };
 const useRecords = () => useQuery<{ honS: RecOut; himo: RecOut; honS90?: RecOut; honS90all?: RecOut }>({ queryKey: ["/api/records"], refetchInterval: 300_000 });
-function RecordCard({ rec, title, note, testid }: { rec?: RecOut; title: string; note: string; testid: string }) {
+function RecordCard({ rec: rec0, title, note, testid, unit = 1 }: { rec?: RecOut; title: string; note: string; testid: string; unit?: number }) {
   const [open, setOpen] = useState(false);
-  if (!rec) return null;
+  if (!rec0) return null;
+  const mul = <T extends { inv: number; ret: number }>(d: T): T => ({ ...d, inv: d.inv * unit, ret: d.ret * unit });
+  const rec = { ...rec0, total: mul(rec0.total), days: rec0.days.map(mul) };
   const t = rec.total; const md = (h: string) => `${parseInt(h.slice(4, 6))}/${parseInt(h.slice(6, 8))}`;
   const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : "—");
   return (
@@ -483,9 +485,9 @@ function RecordCard({ rec, title, note, testid }: { rec?: RecOut; title: string;
 }
 
 function HimoRec() { const { data } = useRecords(); return <RecordCard rec={data?.himo} title="記録開始からの成績（好調の紐）" note="1点100円で計算。今のルール（好調2〜3人・最大6点）に合うレースだけを数えています。" testid="rec-himo" />; }
-function HonSRec() { const { data } = useRecords(); return <RecordCard rec={data?.honS} title="記録開始からの成績（本命S・推奨5点）" note="朝の予想の推奨5点（3連単）を1点100円で買った場合。締切前に決まっていた予想だけを数えています。" testid="rec-hons" />; }
-function HonS90AllRec() { const { data } = useRecords(); return <RecordCard rec={data?.honS90all} title="本命S 自信度90以上の成績（推奨5点）" note="本命Sのうち自信度90以上のレースで、推奨5点（3連単）を1点100円で買った場合。締切前に決まっていた予想だけを数えています。" testid="rec-hons90all" />; }
-function HonS90Rec() { const { data } = useRecords(); return <RecordCard rec={data?.honS90} title="本命S 自信度90以上・20%以上の成績" note="本命Sのうち自信度90以上のレースで、推奨5点の中から確率20%以上の目だけを1点100円で買った場合。20%以上の目がないレースは買わない扱いです。締切前に決まっていた予想だけを数えています。" testid="rec-hons90" />; }
+function HonSRec() { const { data } = useRecords(); return <RecordCard rec={data?.honS} title="記録開始からの成績（本命S・推奨5点）" note="朝の予想の推奨5点（3連単）を1点1,000円で買った場合。締切前に決まっていた予想だけを数えています。" testid="rec-hons" unit={10} />; }
+function HonS90AllRec() { const { data } = useRecords(); return <RecordCard rec={data?.honS90all} title="本命S 自信度90以上の成績（推奨5点）" note="本命Sのうち自信度90以上のレースで、推奨5点（3連単）を1点1,000円で買った場合。締切前に決まっていた予想だけを数えています。" testid="rec-hons90all" unit={10} />; }
+function HonS90Rec() { const { data } = useRecords(); return <RecordCard rec={data?.honS90} title="本命S 自信度90以上・20%以上の成績" note="本命Sのうち自信度90以上のレースで、推奨5点の中から確率20%以上の目だけを1点1,000円で買った場合。20%以上の目がないレースは買わない扱いです。締切前に決まっていた予想だけを数えています。" testid="rec-hons90" unit={10} />; }
 function HimoView({ items, nowHm, toM, madeAt }: { items: PlanItem[]; nowHm: number; toM: (t: string | null) => number; madeAt: string | null }) {
   const xs = items.filter((i) => i.himo).sort((a, b) => toM(a.deadline) - toM(b.deadline));
   const up = xs.filter((i) => toM(i.deadline) > nowHm); const done = xs.filter((i) => toM(i.deadline) <= nowHm).reverse();
@@ -986,7 +988,7 @@ export default function PicksPage() {
 
       {sub === "result" && (
       <section>
-        <SectionTitle sub="朝の予想（3連単 推奨5点・各100円）で計算。レース画面の「朝の予想」と同じ買い目です。">
+        <SectionTitle sub="朝の予想（3連単 推奨5点・各1,000円）で計算。レース画面の「朝の予想」と同じ買い目です。">
           <span className="inline-flex items-center gap-1.5"><Trophy className="h-4 w-4" />本日の成績</span>
         </SectionTitle>
         <div className="mb-3 grid grid-cols-2 gap-2">
