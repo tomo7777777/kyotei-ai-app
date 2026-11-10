@@ -552,27 +552,27 @@ function H2AshiMini({ hd, x, nowHm, toM }: { hd: string; x: H2; nowHm: number; t
     </div>
   );
 }
-// 頭2艇の中穴買い目: 朝に決めた候補10点のうち、締切前のオッズで30倍以上の目だけを買う
+// 頭2艇の買い目: 朝に決めた16点（頭2艇から始まる3連単・AIの確率順）
 function H2BetMini({ hd, x, nowHm, toM, min }: { hd: string; x: H2; nowHm: number; toM: (t: string | null) => number; min: number }) {
   const dl = toM(x.deadline); const on = !x.bet && nowHm >= dl - 60 && nowHm < dl + 5;
   const { data: a } = useQuery<Analysis>({ queryKey: [`/api/race?hd=${hd}&jcd=${x.jcd}&rno=${x.rno}`], enabled: on, staleTime: 60_000, refetchInterval: on ? 120_000 : false });
   if (!x.cands?.length) return null;
   const live: Record<string, number> = {}; if (a) for (const t of a.trifecta) if (t.odds) live[t.combo] = t.odds;
   const odds = x.bet ? x.bet.odds : live; const fixed = !!x.bet; const tri = x.result?.trifecta;
-  const buy = fixed ? x.bet!.buy : x.cands.filter((c) => (odds[c] ?? 0) >= min);
+  const buy = x.cands;
   return (
     <div className="mt-2 rounded-lg border p-2" data-testid={`h2-bet-${x.jcd}-${x.rno}`} onClick={(e) => e.stopPropagation()}>
       <div className="text-[11px]">
-        <span className="font-semibold">中穴の買い目（3連単）</span>
-        <span className="block text-muted-foreground">{fixed ? `締切前のオッズで決定（${buy.length}点）` : Object.keys(odds).length ? `今のオッズで${min}倍以上 ${buy.length}点（締切8分前に決定）` : `候補10点・締切8分前のオッズで${min}倍以上だけ買います`}</span>
+        <span className="font-semibold">買い目（3連単 {x.cands.length}点・朝に決定）</span>
+        <span className="block text-muted-foreground">{Object.keys(odds).length ? (fixed ? "締切8分前のオッズ" : "今のオッズ") : x.result?.trifecta ? "AIの確率が高い順" : "AIの確率が高い順。オッズは締切1時間前から出ます"}</span>
       </div>
       <div className="mt-1.5 flex flex-wrap gap-1">
         {x.cands.map((c) => { const o = odds[c]; const b = buy.includes(c); return (
-          <span key={c} className={cn("flex items-center gap-1 rounded-md border px-1 py-0.5", b ? "border-primary/60 bg-primary/5" : (fixed || o) ? "opacity-50" : "", tri === c && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)] opacity-100")}>
+          <span key={c} className={cn("flex items-center gap-1 rounded-md border px-1 py-0.5", b && "border-primary/40", tri === c && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)] opacity-100")}>
             <ComboView combo={c} small />{o ? <span className={cn("num text-[10px]", b ? "font-bold" : "text-muted-foreground")}>{o}倍</span> : null}
           </span>); })}
       </div>
-      {x.result?.trifecta && fixed ? <div className={cn("mt-1 text-[11px] font-semibold", buy.includes(x.result.trifecta) ? "text-[hsl(var(--chart-2))]" : "text-muted-foreground")}>{buy.includes(x.result.trifecta) ? `的中 ${((x.result.trifectaPay ?? 0) * 10).toLocaleString()}円（1点1,000円）` : buy.length ? "不的中" : "30倍以上の目がなく買わず"}</div> : null}
+      {x.result?.trifecta ? <div className={cn("mt-1 text-[11px] font-semibold", buy.includes(x.result.trifecta) ? "text-[hsl(var(--chart-2))]" : "text-muted-foreground")}>{buy.includes(x.result.trifecta) ? `的中 ${((x.result.trifectaPay ?? 0) * 10).toLocaleString()}円（1点1,000円）` : "不的中"}</div> : null}
     </div>
   );
 }
@@ -608,7 +608,7 @@ function Head2View({ nowHm, toM }: { nowHm: number; toM: (t: string | null) => n
   };
   return (
     <section className="space-y-3">
-      <SectionTitle sub={morning ? `朝のAIの予想（固定）で、1号艇の1着率が21%以下のレース（全場、1日5〜8レースほど）だけ、1号艇以外で1着率が高い2艇を出します。展示を待たずに朝の時点で決まり、一日を通して変わりません。展示や船足を足しても当たり方はほぼ変わらなかったため、10/17から朝に出す形にしました。過去（6〜10月・全場999レース）の検証では、1号艇が負けたのが85%、この2艇のどちらかが1着になったのが63.5%でした。11/11から中穴の買い目も出します：朝のAIが選んだ「頭2艇から始まる3連単」の上位10点を候補として固定し、締切8分前のオッズで30倍以上の目だけを買います。過去（6〜10月・確定オッズ）の検証では1レース平均約4点・的中率9%・回収率121%（前半115%・後半126%）でしたが、条件は検証結果を見て選んだものなので、実際はこれより下がる可能性があります。` : `桐生・戸田・平和島・住之江・鳴門・福岡で、締切前のオッズにオリジナル展示（直線・まわり足・一周など）・展示タイム・スタート展示・進入・今節の足・朝のAIを足して1着率を計算し直します。1号艇の1着率が市場（オッズ）より低いと見たレース（全レースの約1割）だけ、1号艇以外で1着になりやすい2艇を出します。締切20分前から2分ごとに更新し、締切直前の内容で記録します。買い目は出していません。`}>頭2艇（試験中）</SectionTitle>
+      <SectionTitle sub={morning ? `朝のAIの予想（固定）で、1号艇の1着率が21%以下のレース（全場、1日5〜8レースほど）だけ、1号艇以外で1着率が高い2艇を出します。展示を待たずに朝の時点で決まり、一日を通して変わりません。展示や船足を足しても当たり方はほぼ変わらなかったため、10/17から朝に出す形にしました。過去（6〜10月・全場999レース）の検証では、1号艇が負けたのが85%、この2艇のどちらかが1着になったのが63.5%でした。11/11から3連単の買い目も出します：朝のAIが選んだ「頭2艇から始まる3連単」の確率上位16点で、オッズに関係なくすべて買います（一日変わりません）。過去（6〜10月・999レース）の検証では的中率50%・回収率95%（前半97%・後半93%）でした。` : `桐生・戸田・平和島・住之江・鳴門・福岡で、締切前のオッズにオリジナル展示（直線・まわり足・一周など）・展示タイム・スタート展示・進入・今節の足・朝のAIを足して1着率を計算し直します。1号艇の1着率が市場（オッズ）より低いと見たレース（全レースの約1割）だけ、1号艇以外で1着になりやすい2艇を出します。締切20分前から2分ごとに更新し、締切直前の内容で記録します。買い目は出していません。`}>頭2艇（試験中）</SectionTitle>
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg border bg-card p-2"><div className="text-[10px] text-muted-foreground">本日 頭的中</div><div className="num font-bold">{data ? `${data.today.hit}/${data.today.n}` : "—"}</div></div>
         <div className="rounded-lg border bg-card p-2"><div className="text-[10px] text-muted-foreground">2艇で1・2着</div><div className="num font-bold">{data ? `${data.today.both}/${data.today.n}` : "—"}</div></div>
@@ -632,7 +632,7 @@ function Head2View({ nowHm, toM }: { nowHm: number; toM: (t: string | null) => n
           {data!.allLive && data!.allLive.total.n > 0 && <p className="mt-1.5 text-[11px] text-muted-foreground" data-testid="rec-head2-live">締切前に展示とオッズで出していた頃（{md(data!.allLive.days[0].hd)}{data!.allLive.days.length > 1 ? `〜${md(data!.allLive.days[data!.allLive.days.length - 1].hd)}` : ""}）：頭的中 {data!.allLive.total.hit}/{data!.allLive.total.n}、2艇で1・2着 {data!.allLive.total.both}/{data!.allLive.total.n}、1号艇が負け {data!.allLive.total.lose1}/{data!.allLive.total.n}</p>}
         </section>
       )}
-      {morning && data?.betAll && <RecordCard rec={{ from: data.betAll.days[0]?.hd ?? null, days: data.betAll.days, total: data.betAll.total, pending: 0 }} unit={10} title="頭2艇 中穴の成績（30倍以上）" note={`朝の候補10点のうち、締切8分前のオッズで${data.betMin ?? 30}倍以上の目を1点1,000円で買った場合。30倍以上の目がないレースは買わない扱いです。`} testid="rec-head2-bet" />}
+      {morning && data?.betAll && <RecordCard rec={{ from: data.betAll.days[0]?.hd ?? null, days: data.betAll.days, total: data.betAll.total, pending: 0 }} unit={10} title="頭2艇 3連単16点の成績" note="朝に決めた16点（頭2艇から始まる3連単・AIの確率上位）を1点1,000円で買った場合。" testid="rec-head2-bet" />}
       {isLoading ? <Skeleton className="h-28 w-full rounded-xl" /> : up.length ? <div className="grid gap-2 lg:grid-cols-2">{up.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div>
         : <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">{morning ? "今日の対象のレースはすべて締切を迎えました（朝の予想で決まります）。" : "今は対象のレースがありません。締切の20分前ごろ、展示の後に条件に合うレースが出ます（1日4レースほど）。"}</div>}
       {done.length > 0 && (<><h3 className="pt-2 text-sm font-bold">締切後</h3><div className="grid gap-2 lg:grid-cols-2">{done.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div></>)}

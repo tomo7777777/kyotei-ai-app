@@ -90,11 +90,11 @@ const honOf = (a: Analysis) => {
   const qu = Array.from(q.entries()).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([combo, prob]) => ({ combo, prob }));
   return fav ? { fav: fav.lane, favProb: fav.winProb, qu } : null;
 };
-// 頭2艇の中穴候補: 朝のAIで1号艇1着率が低いレースだけ、頭2艇（1号艇以外の1着率上位2艇）から始まる3連単をAIの確率順に10点
+// 頭2艇の中穴候補: 朝のAIで1号艇1着率が低いレースだけ、頭2艇（1号艇以外の1着率上位2艇）から始まる3連単をAIの確率順に16点
 const h2cOf = (a: Analysis): string[] | null => {
   const e1 = a.entries.find((e) => e.lane === 1); if (!e1 || a.entries.length < 6 || e1.winProb > 0.25) return null;
   const heads = a.entries.filter((e) => e.lane !== 1).sort((x, y) => y.winProb - x.winProb).slice(0, 2).map((e) => e.lane);
-  return a.trifecta.filter((c) => heads.includes(+c.combo[0])).sort((x, y) => (y.modelProb ?? y.prob) - (x.modelProb ?? x.prob)).slice(0, 10).map((c) => c.combo);
+  return a.trifecta.filter((c) => heads.includes(+c.combo[0])).sort((x, y) => (y.modelProb ?? y.prob) - (x.modelProb ?? x.prob)).slice(0, 16).map((c) => c.combo);
 };
 const summarize = (a: Analysis): PickSummary => ({
   hd: a.hd, jcd: a.jcd, venue: a.venue, rno: a.rno, raceTitle: a.raceTitle, deadline: a.deadline,

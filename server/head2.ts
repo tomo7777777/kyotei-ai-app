@@ -16,10 +16,10 @@ export type Head2Rec = {
   heads: { lane: number; name: string; p: number; pmkt: number }[];
   firstSeen: string; lastSeen: string; mode?: "live" | "morning";
   result?: { first: number | null; second: number | null; trifecta: string | null; trifectaPay: number | null } | null;
-  cands?: string[]; // 朝に決めた中穴候補10点（頭2艇から始まる3連単）
+  cands?: string[]; // 朝に決めた買い目16点（頭2艇から始まる3連単・AIの確率順）
   bet?: { at: string; odds: Record<string, number>; buy: string[] } | null; // 締切前のオッズで決めた買い目（30倍以上）
 };
-export const BET_MIN_ODDS = 30;
+export const BET_MIN_ODDS = 0; // オッズ条件なし（朝の16点をすべて買う）
 const cache: Record<string, Head2Rec[]> = {};
 export function isHead2Race(hd: string, jcd: string, rno: number) { return loadH2(hd).some((x) => x.sel && x.jcd === jcd && x.rno === rno); }
 export function loadH2(hd: string): Head2Rec[] {
@@ -117,7 +117,7 @@ export async function head2Tick() {
       ch = morningBuild(hd, xs);
       // 朝の頭2艇に出したレースだけ、6場以外でも船足（オリジナル展示）を展示の後に取りに行く（予想は変えない）
       for (const x of xs) { const m = toMin(x.deadline || ""); if (m === null || ORI_V[x.jcd] || now < m - 25 || now > m + 60) continue; await grabOne(x.jcd, hd, x.rno, now > m + 30).catch(() => false); }
-      // 中穴の買い目: 締切8分前〜1分前のオッズで、朝の候補10点のうち30倍以上だけを買い目に固定（一度決めたら変えない）
+      // 締切8分前〜1分前のオッズを記録（買い目は朝の16点のまま）
       for (const x of xs) {
         const m = toMin(x.deadline || ""); if (m === null || !x.cands?.length || x.bet || m - now > 8 || m - now < 1) continue;
         const o = await B.getOdds3t(x.jcd, x.rno, hd).catch(() => ({} as Record<string, number>)); if (!Object.keys(o).length) continue;
@@ -185,7 +185,7 @@ function stats(xs: Head2Rec[]) {
 }
 function betStats(xs: Head2Rec[]) {
   let n = 0, hit = 0, pts = 0, ret = 0;
-  for (const x of xs) { if (!x.sel || !x.bet || !x.result?.trifecta) continue; n++; pts += x.bet.buy.length; if (x.bet.buy.includes(x.result.trifecta)) { hit++; ret += x.result.trifectaPay ?? 0; } }
+  for (const x of xs) { const buy = x.cands ?? []; if (!x.sel || !buy.length || !x.result?.trifecta) continue; n++; pts += buy.length; if (buy.includes(x.result.trifecta)) { hit++; ret += x.result.trifectaPay ?? 0; } }
   return { n, hit, pts, inv: pts * 100, ret };
 }
 export function head2Resp(hd: string) {
