@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import * as B from "./boatrace";
 import { analyze, jstNowMin, toMin, type Analysis } from "./model";
 import { oriTick, getAshi, getVenueAshi, ORI_V } from "./oriten";
+import { manshuTick, manshuResp, putMorningP, setManPlanSource } from "./manshu";
 import { head2Tick, head2Resp, setPfSource, head2Retro, setPlanSource, isHead2Race, loadH2 } from "./head2";
 setInterval(() => B.runBg(oriTick).catch(() => {}), 3 * 60_000);
 setTimeout(() => B.runBg(oriTick).catch(() => {}), 20_000);
@@ -73,6 +74,7 @@ type PickSummary = {
   triEv?: Analysis["triEv"];
   himo?: Himo | null;
   h2c?: string[] | null;
+  mp?: Record<string, number>;
 };
 // 今節好調の紐: 朝のAIで1号艇1着率80%以上のレースで、今節3走以上・平均着順2.5以内の選手（2〜6号艇）を2・3着に
 type Himo = { lanes: { lane: number; n: number; avg: number }[]; picks: string[] };
@@ -100,7 +102,7 @@ const summarize = (a: Analysis): PickSummary => ({
   hd: a.hd, jcd: a.jcd, venue: a.venue, rno: a.rno, raceTitle: a.raceTitle, deadline: a.deadline,
   confidence: a.confidence, confidenceLabel: a.confidenceLabel,
   entries: a.entries.map((e) => ({ lane: e.lane, name: e.name, cls: e.cls, mark: e.mark, winProb: e.winProb, tags: e.tags.slice(0, 3).map((t) => t.label) })),
-  hon: honOf(a), exEv: a.exEv ?? [], triEv: a.triEv ?? [], himo: himoOf(a), h2c: h2cOf(a),
+  hon: honOf(a), exEv: a.exEv ?? [], triEv: a.triEv ?? [], himo: himoOf(a), h2c: h2cOf(a), mp: Object.fromEntries(a.trifecta.map((c) => [c.combo, Math.round((c.modelProb ?? c.prob) * 1e6) / 1e6])),
   main: a.main, value: a.value, comment: a.comment, betTips: a.betTips, distortions: a.distortions, manshu: a.manshu, chuana: a.chuana, oddsAvailable: a.oddsAvailable, beforeAvailable: a.beforeAvailable,
 });
 
@@ -286,7 +288,9 @@ setInterval(() => B.runBg(tenjiTick).catch(() => {}), 60_000);
 // 頭2艇: 朝の予想（固定）の1着率を使う
 setPfSource((hd, jcd, rno) => { const it = loadPlan(hd)?.items.find((x) => x.jcd === jcd && x.rno === rno); if (!it) return null; return { pf: [1, 2, 3, 4, 5, 6].map((l) => it.entries.find((e) => e.lane === l)?.winProb ?? null), names: [1, 2, 3, 4, 5, 6].map((l) => it.entries.find((e) => e.lane === l)?.name ?? "") }; });
 setPlanSource((hd) => { const p = loadPlan(hd); if (!p) return null; return p.items.map((it) => ({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, addedAt: it.addedAt, h2c: it.h2c ?? null, entries: it.entries.map((e) => ({ lane: e.lane, name: e.name, winProb: e.winProb })) })); });
+setManPlanSource((hd) => { const p = loadPlan(hd); if (!p) return null; return p.items.map((it) => ({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, addedAt: it.addedAt })); });
 setInterval(() => B.runBg(head2Tick).catch(() => {}), 2 * 60_000);
+setInterval(() => B.runBg(manshuTick).catch(() => {}), 2 * 60_000);
 setTimeout(() => B.runBg(tenjiTick).catch(() => {}), 5_000);
 function tenjiAll() {
   const out: { races: number; win: number; wins: Record<string, number> } = { races: 0, win: 0, wins: {} };
@@ -389,7 +393,9 @@ function updatePlan(hd: string, ranked: PickSummary[]) {
   const have = new Set(plan.items.map((i) => `${i.jcd}-${i.rno}`));
   for (const p of ranked) {
     if (have.has(`${p.jcd}-${p.rno}`)) continue;
-    plan.items.push({ ...p, tier: favP(p) >= S_TH ? "S" : "other", addedAt: now, late: plan.items.length > 0 });
+    if (p.mp) putMorningP(hd, p.jcd, p.rno, p.mp);
+    const { mp: _mp, ...p0 } = p;
+    plan.items.push({ ...p0, tier: favP(p) >= S_TH ? "S" : "other", addedAt: now, late: plan.items.length > 0 });
     changed = true;
   }
   if (changed) savePlan(plan);
@@ -458,6 +464,7 @@ async function runPickJobInner(hd: string) {
     st.ranked = ranked;
     st.updatedAt = new Date().toISOString();
     updatePlan(hd, ranked);
+    for (const p of ranked) delete p.mp; // 朝の確率は data/mp に保存済み。画面用データには載せない
     try { updateEx(hd, ranked); } catch {}
     try { updateTri(hd, ranked); } catch {}
     // persist current top picks; drop upcoming picks that fell out of the top list
@@ -612,6 +619,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.get("/api/manshu", (req, res) => { try { res.json(manshuResp(String(req.query.hd || B.todayHd()))); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/head2", (req, res) => { try { B.runBg(() => head2Retro(String(req.query.hd || B.todayHd()))).catch(() => {}); res.json(head2Resp(String(req.query.hd || B.todayHd()))); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/records", (_req, res) => { try { res.json(records()); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/picks", async (req, res) => {
