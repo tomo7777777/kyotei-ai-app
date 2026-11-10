@@ -1,13 +1,13 @@
-// 万舟狙い（的中率重視）: 朝のAIの確率と締切8分前のオッズで「100倍以上の目にAIが置く確率の合計」が高いレース（全体の上位5%）だけ、
-// 100倍以上の目をAIの確率順に20点買う。過去（6〜10月・約2万レース）の検証: 1日約8レース・的中率14%・回収率107%。
+// 万舟狙い（的中率重視）: 朝のAIの確率と締切8分前のオッズで「50倍以上の目にAIが置く確率の合計」が高いレース（全体の上位5%）だけ、
+// 50倍以上の目をAIの確率順に30点買う。過去（6〜10月・約2万レース）の検証: 1日約8レース・的中率31%・回収率100%。
 import fs from "node:fs";
 import path from "node:path";
 import * as B from "./boatrace";
 import { jstNowMin, toMin } from "./model";
 
-export const MAN_TH = 0.2666; // 過去の全レースの上位5%
-export const MAN_MIN = 100; // 100倍以上
-export const MAN_N = 20;
+export const MAN_TH = 0.509; // 過去の全レースの上位5%（50倍以上の目の確率合計）
+export const MAN_MIN = 50; // 50倍以上
+export const MAN_N = 30;
 const DIR = path.resolve("data/manshu"); fs.mkdirSync(DIR, { recursive: true });
 const MP_DIR = path.resolve("data/mp"); fs.mkdirSync(MP_DIR, { recursive: true });
 

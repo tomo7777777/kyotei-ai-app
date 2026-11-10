@@ -589,7 +589,7 @@ function ManView({ nowHm, toM }: { nowHm: number; toM: (t: string | null) => num
         <Link href={`/race/${data!.hd}/${x.jcd}/${x.rno}`} className="flex items-center gap-2 hover:text-primary">
           <span className="whitespace-nowrap text-sm font-semibold">{x.venue} {x.rno}R</span>
           <span className="num text-xs text-muted-foreground">{x.deadline}</span>
-          <span className="whitespace-nowrap text-[11px] text-muted-foreground">万舟の見込み<span className="num ml-0.5 font-bold text-foreground">{Math.round(x.pman * 100)}%</span></span>
+          <span className="whitespace-nowrap text-[11px] text-muted-foreground">高配当の見込み<span className="num ml-0.5 font-bold text-foreground">{Math.round(x.pman * 100)}%</span></span>
           <span className="ml-auto text-xs">{tri ? <span className={cn("num font-semibold", hit ? "text-[hsl(var(--chart-2))]" : "text-muted-foreground")}>{hit ? `的中 ${((x.result?.trifectaPay ?? 0) * 10).toLocaleString()}円` : "不的中"}</span> : toM(x.deadline) <= nowHm ? <span className="text-muted-foreground">結果待ち</span> : null}</span>
         </Link>
         <div className="mt-2 flex flex-wrap gap-1">
@@ -605,8 +605,8 @@ function ManView({ nowHm, toM }: { nowHm: number; toM: (t: string | null) => num
   };
   return (
     <section className="space-y-3">
-      <SectionTitle sub={`締切8分前のオッズで、100倍以上の目に朝のAIが置いている確率の合計（万舟の見込み）が${Math.round((data?.th ?? 0.2666) * 100)}%以上のレース（全体の上位5%・1日8レースほど）だけ、100倍以上の目をAIの確率が高い順に${data?.n ?? 20}点買います。締切8分前に決まり、そのあと変えません。過去（6〜10月・約2万レース・確定オッズ）の検証では的中率14%（7レースに1回ほど）・回収率107%（前半103%・後半110%）・当たったときの配当の中央値は約1万3千円でした。条件は検証結果を見て選んだので、実際はこれより下がる可能性があります。11/11から記録します。`}>万舟狙い（試験中）</SectionTitle>
-      {data && <RecordCard rec={{ from: data.all.days[0]?.hd ?? null, days: data.all.days, total: data.all.total, pending: 0 }} unit={10} title="記録開始からの成績（万舟狙い・20点）" note="締切8分前に決めた20点（100倍以上）を1点1,000円で買った場合。" testid="rec-man" />}
+      <SectionTitle sub={`締切8分前のオッズで、${data?.min ?? 50}倍以上の目に朝のAIが置いている確率の合計（高配当の見込み）が${Math.round((data?.th ?? 0.509) * 100)}%以上のレース（全体の上位5%・1日8レースほど）だけ、${data?.min ?? 50}倍以上の目をAIの確率が高い順に${data?.n ?? 30}点買います。締切8分前に決まり、そのあと変えません。過去（6〜10月・約2万レース・確定オッズ）の検証では的中率31%（3レースに1回ほど）・回収率100%（前半109%・後半91%）・当たったときの配当の中央値は約7千円でした。条件は検証結果を見て選んだので、実際はこれより下がる可能性があります。11/11から記録します。`}>万舟狙い（試験中）</SectionTitle>
+      {data && <RecordCard rec={{ from: data.all.days[0]?.hd ?? null, days: data.all.days, total: data.all.total, pending: 0 }} unit={10} title={`記録開始からの成績（万舟狙い・${data.n}点）`} note={`締切8分前に決めた${data.n}点（${data.min}倍以上）を1点1,000円で買った場合。`} testid="rec-man" />}
       {isLoading ? <Skeleton className="h-28 w-full rounded-xl" /> : up.length ? <div className="grid gap-2 lg:grid-cols-2">{up.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div>
         : <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">締切8分前に判定して、対象になったレースだけここに出ます。{data ? `本日はここまで${data.judged}レースを判定し、対象は${xs.length}レースです。` : ""}</div>}
       {done.length > 0 && (<><h3 className="pt-2 text-sm font-bold">締切後</h3><div className="grid gap-2 lg:grid-cols-2">{done.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div></>)}
