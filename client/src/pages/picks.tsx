@@ -145,7 +145,7 @@ function SRow({ p }: { p: PlanItem }) {
 }
 
 function SoonBanner({ items, nowHm, toM }: { items: PlanItem[]; nowHm: number; toM: (t: string | null) => number }) {
-  const soon = items.filter((i) => (i.tier === "S" || i.manshu?.tier || i.chuana?.tier) && toM(i.deadline) > nowHm && toM(i.deadline) - nowHm <= 15).sort((a, b) => toM(a.deadline) - toM(b.deadline));
+  const soon = items.filter((i) => i.tier === "S" && toM(i.deadline) > nowHm && toM(i.deadline) - nowHm <= 15).sort((a, b) => toM(a.deadline) - toM(b.deadline));
   const [perm, setPerm] = useState<string>(typeof Notification !== "undefined" ? Notification.permission : "unsupported");
   const notified = useRef(new Set<string>());
   useEffect(() => {
@@ -154,7 +154,7 @@ function SoonBanner({ items, nowHm, toM }: { items: PlanItem[]; nowHm: number; t
       const k = `${i.hd}-${i.jcd}-${i.rno}`;
       if (notified.current.has(k)) continue;
       notified.current.add(k);
-      try { new Notification(`${i.venue}${i.rno}R まもなく締切（${i.deadline}）`, { body: [i.tier === "S" ? `期待度S 自信度${i.confidence}` : "", i.manshu?.tier ? `万舟${i.manshu.tier}` : "", i.chuana?.tier ? "中穴S" : ""].filter(Boolean).join("・") }); } catch {}
+      try { new Notification(`${i.venue}${i.rno}R まもなく締切（${i.deadline}）`, { body: [i.tier === "S" ? `期待度S 自信度${i.confidence}` : ""].filter(Boolean).join("・") }); } catch {}
     }
   }, [soon.map((i) => i.jcd + i.rno).join(","), perm]);
   if (!soon.length) return perm === "default" ? (
@@ -179,8 +179,6 @@ function SoonBanner({ items, nowHm, toM }: { items: PlanItem[]; nowHm: number; t
               <span className="font-semibold">{i.venue}{i.rno}R</span>
               <span className="num text-xs text-muted-foreground">あと{toM(i.deadline) - nowHm}分</span>
               {i.tier === "S" && <span className="rounded bg-primary px-1 text-[10px] font-bold text-primary-foreground">S</span>}
-              {i.manshu?.tier && <span className="rounded bg-[hsl(var(--chart-4))] px-1 text-[10px] font-bold text-white">万舟{i.manshu.tier}</span>}
-              {i.chuana?.tier && <span className="rounded bg-[hsl(var(--chart-3))] px-1 text-[10px] font-bold text-white">中穴S</span>}
             </Link>
           ))}
         </div>
@@ -404,7 +402,7 @@ function OtherRow({ p }: { p: PlanItem }) {
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-3 p-3 text-left" data-testid={`button-other-${p.jcd}-${p.rno}`}>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">{p.venue} {p.rno}R <span className="num ml-1 text-xs font-normal text-muted-foreground">{p.deadline}</span>
-            {p.chuana?.tier && <span className="ml-1.5 rounded bg-[hsl(var(--chart-3))] px-1 text-[10px] font-bold text-white">中穴S</span>}{p.manshu?.tier && <span className="ml-1.5 rounded bg-[hsl(var(--chart-4))] px-1 text-[10px] font-bold text-white">万舟{p.manshu.tier}</span>}</div>
+            </div>
           {fav && <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">◎<Boat n={fav.lane} small /> {fav.name}</div>}
         </div>
         <span className="text-right"><span className="num text-lg font-bold">{p.confidence}</span><span className="block text-[10px] text-muted-foreground">自信度</span></span>
@@ -840,7 +838,7 @@ export default function PicksPage() {
   const btB = bt?.oos?.buckets?.["75以上"];
   const st = data?.status;
 
-  const [mode, setMode] = useState<"honmei" | "manshu" | "chuana" | "both" | "exev" | "tenji" | "head2">("chuana");
+  const [mode, setMode] = useState<"honmei" | "manshu" | "chuana" | "both" | "exev" | "tenji" | "head2">("honmei");
   const [sub, setSub] = useState<"s" | "other" | "result" | "himo">("s");
   const [doneFilter, setDoneFilter] = useState<"s" | "all">("s");
   const plan = data?.plan;
@@ -849,11 +847,12 @@ export default function PicksPage() {
   const byDl = (a: PlanItem, b: PlanItem) => toM(a.deadline) - toM(b.deadline);
   const items = plan?.items ?? [];
   const sAll = items.filter((i) => i.tier === "S").sort(byDl);
-  const oAll = items.filter((i) => i.tier !== "S").sort(byDl);
+  const OTHER_MIN = 70;
+  const oAll = items.filter((i) => i.tier !== "S" && i.confidence >= OTHER_MIN).sort(byDl);
   const sUp = sAll.filter((i) => toM(i.deadline) > nowHm);
   const oUp = oAll.filter((i) => toM(i.deadline) > nowHm);
   const sDone = sAll.filter((i) => toM(i.deadline) <= nowHm).reverse();
-  const allDone = items.filter((i) => toM(i.deadline) <= nowHm).sort(byDl).reverse();
+  const allDone = [...sAll, ...oAll].filter((i) => toM(i.deadline) <= nowHm).sort(byDl).reverse();
   const stat = (xs: PlanItem[]) => {
     const st = xs.filter((x) => x.result?.finished); const hit = st.filter((x) => x.main.slice(0, 5).some((m) => m.combo === x.result?.trifecta));
     const inv = st.length * 500; const ret = hit.reduce((a, x) => a + (x.result?.trifectaPay ?? 0), 0);
@@ -865,7 +864,7 @@ export default function PicksPage() {
   return (
     <div className="space-y-8">
       <div className="-mx-1 overflow-x-auto px-1"><div className="inline-flex rounded-lg border bg-card p-1" role="tablist">
-        {([["chuana", "中穴狙い"], ["honmei", "本命狙い"], ["head2", "頭2艇"], ["both", "中穴×万舟"], ["tenji", "展示"]] as const).map(([k, l]) => (
+        {([["honmei", "本命狙い"], ["head2", "頭2艇"], ["tenji", "展示"]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)} data-testid={`tab-${k}`}
             className={cn("whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors sm:px-3 sm:text-sm", mode === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{l}</button>
         ))}
@@ -874,12 +873,11 @@ export default function PicksPage() {
       <SoonBanner items={items} nowHm={nowHm} toM={toM} />
       {mode === "head2" ? <Head2View nowHm={nowHm} toM={toM} /> : mode === "tenji" ? <TenjiView nowHm={nowHm} toM={toM} /> : mode === "exev" ? <ExView ex={data?.exev} nowHm={nowHm} toM={toM} /> : mode === "chuana" ? <ExView tri ex={data?.triev} nowHm={nowHm} toM={toM} /> : mode === "both" ? <BothView items={items} nowHm={nowHm} toM={toM} madeAt={madeAt} loading={isLoading || (!plan && !!st?.running)} /> : mode !== "honmei" ? <ManshuView key={mode} kind={mode} items={items} nowHm={nowHm} toM={toM} madeAt={madeAt} loading={isLoading || (!plan && !!st?.running)} /> : (<>
       <div className="sticky top-14 z-10 -mx-1 flex gap-1 overflow-x-auto rounded-lg border bg-card/95 p-1 backdrop-blur" role="tablist" data-testid="subtabs">
-        {([["s", `期待度S ${sUp.length}`], ["himo", `好調の紐 ${items.filter((i) => i.himo && toM(i.deadline) > nowHm).length}`], ["other", `その他のレース ${oUp.length}`], ["result", "本日の成績"]] as const).map(([k, l]) => (
+        {([["s", `期待度S ${sUp.length}`], ["other", `その他のレース ${oUp.length}`], ["result", "本日の成績"]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={sub === k} onClick={() => setSub(k)} data-testid={`subtab-${k}`}
             className={cn("flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition-colors", sub === k ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground")}>{l}</button>
         ))}
       </div>
-      {sub === "himo" && <HimoView items={items} nowHm={nowHm} toM={toM} madeAt={madeAt} />}
       {sub === "s" && (<>
       <section>
         <SectionTitle
@@ -914,7 +912,7 @@ export default function PicksPage() {
           </div>
         )}
         <p className="mt-2 text-right text-xs text-muted-foreground">
-          期待度S {sAll.length}レース・その他 {oAll.length}レース{st?.updatedAt ? `（最新情報 ${new Date(st.updatedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）` : ""}
+          期待度S {sAll.length}レース・その他（自信度70以上） {oAll.length}レース{st?.updatedAt ? `（最新情報 ${new Date(st.updatedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}）` : ""}
         </p>
       </section>
 
@@ -978,7 +976,7 @@ export default function PicksPage() {
 
       {sub === "other" && (
         <section>
-          <SectionTitle sub="期待度S以外のレース（朝の分析時点）。タップすると推奨5点などの詳細が開きます。">その他のレース</SectionTitle>
+          <SectionTitle sub="期待度S以外で、朝の分析時点の自信度が70以上のレースだけを出しています。タップすると推奨5点などの詳細が開きます。">その他のレース</SectionTitle>
           {oUp.length === 0 ? <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">これから行われるその他のレースはありません。</p> : null}
           <div className="grid items-start gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {oUp.map((p) => <OtherRow key={`${p.jcd}-${p.rno}`} p={p} />)}
@@ -992,7 +990,7 @@ export default function PicksPage() {
           <span className="inline-flex items-center gap-1.5"><Trophy className="h-4 w-4" />本日の成績</span>
         </SectionTitle>
         <div className="mb-3 grid grid-cols-2 gap-2">
-          {([["期待度S", sS], ["その他のレース", sO]] as const).map(([l, x]) => (
+          {([["期待度S", sS], ["その他（自信度70以上）", sO]] as const).map(([l, x]) => (
             <div key={l} className="rounded-lg border bg-card p-3">
               <div className={cn("text-xs font-semibold", l !== "期待度S" && "text-muted-foreground")}>{l}</div>
               <div className="mt-1 flex items-baseline gap-3 text-sm"><span>的中 <span className="num font-bold">{x.hit}/{x.n}</span></span><span>回収率 <span className={cn("num font-bold", x.inv > 0 && x.ret >= x.inv && "text-[hsl(var(--chart-2))]")}>{x.inv ? `${Math.round((x.ret / x.inv) * 100)}%` : "—"}</span></span></div>
@@ -1000,7 +998,7 @@ export default function PicksPage() {
           ))}
         </div>
         <div className="mb-2 inline-flex rounded-md border p-0.5 text-xs">
-          {([["s", `期待度S ${sDone.length}`], ["all", `全レース ${allDone.length}`]] as const).map(([k, l]) => (
+          {([["s", `期待度S ${sDone.length}`], ["all", `S＋自信度70以上 ${allDone.length}`]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setDoneFilter(k)} data-testid={`filter-done-${k}`} className={cn("rounded px-2.5 py-1 font-semibold", doneFilter === k ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{l}</button>
           ))}
         </div>
