@@ -605,8 +605,8 @@ function ManView({ nowHm, toM }: { nowHm: number; toM: (t: string | null) => num
   };
   return (
     <section className="space-y-3">
-      <SectionTitle sub={`締切8分前のオッズで、${data?.min ?? 50}倍以上の目に朝のAIが置いている確率の合計（高配当の見込み）が${Math.round((data?.th ?? 0.509) * 100)}%以上のレース（全体の上位5%・1日8レースほど）だけ、${data?.min ?? 50}倍以上の目をAIの確率が高い順に${data?.n ?? 30}点買います。締切8分前に決まり、そのあと変えません。過去（6〜10月・約2万レース・確定オッズ）の検証では的中率31%（3レースに1回ほど）・回収率100%（前半109%・後半91%）・当たったときの配当の中央値は約7千円でした。条件は検証結果を見て選んだので、実際はこれより下がる可能性があります。11/11から記録します。`}>万舟狙い（試験中）</SectionTitle>
-      {data && <RecordCard rec={{ from: data.all.days[0]?.hd ?? null, days: data.all.days, total: data.all.total, pending: 0 }} unit={10} title={`記録開始からの成績（万舟狙い・${data.n}点）`} note={`締切8分前に決めた${data.n}点（${data.min}倍以上）を1点1,000円で買った場合。`} testid="rec-man" />}
+      <SectionTitle sub={`締切8分前のオッズで、${data?.min ?? 50}倍以上の目に朝のAIが置いている確率の合計（高配当の見込み）が${Math.round((data?.th ?? 0.5594) * 100)}%以上のレース（全体の上位3%・1日4〜5レースほど）だけ、${data?.min ?? 50}倍以上の目をAIの確率が高い順に${data?.n ?? 20}点買います。締切8分前に決まり、そのあと変えません。過去（6〜10月・約2万レース・確定オッズ）の検証では的中率22%（4〜5レースに1回ほど）・回収率106%（前半109%・後半104%）・当たったときの配当の中央値は約7,750円でした。条件は多くの候補から選んだので、実際はこれより下がる可能性があります。11/11から記録します。`}>狙い（中穴〜万舟・試験中）</SectionTitle>
+      {data && <RecordCard rec={{ from: data.all.days[0]?.hd ?? null, days: data.all.days, total: data.all.total, pending: 0 }} unit={10} title={`記録開始からの成績（狙い・${data.n}点）`} note={`締切8分前に決めた${data.n}点（${data.min}倍以上）を1点1,000円で買った場合。`} testid="rec-man" />}
       {isLoading ? <Skeleton className="h-28 w-full rounded-xl" /> : up.length ? <div className="grid gap-2 lg:grid-cols-2">{up.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div>
         : <div className="rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground">締切8分前に判定して、対象になったレースだけここに出ます。{data ? `本日はここまで${data.judged}レースを判定し、対象は${xs.length}レースです。` : ""}</div>}
       {done.length > 0 && (<><h3 className="pt-2 text-sm font-bold">締切後</h3><div className="grid gap-2 lg:grid-cols-2">{done.map((x) => <Row key={`${x.jcd}-${x.rno}`} x={x} />)}</div></>)}
@@ -929,7 +929,7 @@ export default function PicksPage() {
   return (
     <div className="space-y-8">
       <div className="-mx-1 overflow-x-auto px-1"><div className="inline-flex rounded-lg border bg-card p-1" role="tablist">
-        {([["honmei", "本命狙い"], ["head2", "頭2艇"], ["man", "万舟狙い"], ["tenji", "展示"]] as const).map(([k, l]) => (
+        {([["honmei", "本命狙い"], ["head2", "頭2艇"], ["man", "狙い"], ["tenji", "展示"]] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)} data-testid={`tab-${k}`}
             className={cn("whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors sm:px-3 sm:text-sm", mode === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{l}</button>
         ))}

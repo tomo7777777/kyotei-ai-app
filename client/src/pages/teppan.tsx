@@ -10,6 +10,9 @@ type TRace = {
   picks: { combo: string; prob: number }[];
   result: { trifecta: string | null; trifectaPay: number | null } | null; hit: boolean | null;
 };
+type MRec = { jcd: string; venue: string; rno: number; deadline: string | null; pman: number; at: string; buy: { combo: string; odds: number; p: number }[]; result?: { trifecta: string | null; trifectaPay: number | null } | null };
+type MStat = { n: number; hit: number; pts: number; inv: number; ret: number };
+type MResp = { hd: string; th: number; min: number; n: number; judged: number; races: MRec[]; today: MStat; all: { days: ({ hd: string } & MStat)[]; total: MStat } };
 type RecDay = { hd: string; n: number; hit: number; inv: number; ret: number };
 type TResp = {
   hd: string; createdAt: string | null; races: TRace[];
@@ -70,6 +73,66 @@ function RaceCard({ r, hd, live }: { r: TRace; hd: string; live?: boolean }) {
   );
 }
 
+function NeraiCard({ r, hd }: { r: MRec; hd: string }) {
+  const tri = r.result?.trifecta; const hit = !!tri && r.buy.some((b) => b.combo === tri);
+  const left = toM(r.deadline) - nowHm();
+  return (
+    <div className={cn("rounded-2xl border bg-card p-4", hit && "border-[hsl(var(--chart-2))]")} data-testid={`nerai-${r.jcd}-${r.rno}`}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-lg font-bold">{r.venue} {r.rno}R</span>
+        <span className="num text-sm text-muted-foreground">締切 {r.deadline ?? "—"}</span>
+        <span className="ml-auto text-xs">
+          {tri ? (hit ? <span className="rounded-full bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 font-bold text-[hsl(var(--chart-2))]">的中</span> : <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">不的中</span>)
+            : left > 0 ? <span className="num rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">あと{left >= 60 ? `${Math.floor(left / 60)}時間${left % 60}分` : `${left}分`}</span> : <span className="text-muted-foreground">結果待ち</span>}
+        </span>
+      </div>
+      <div className="mt-0.5 text-xs text-muted-foreground">3連単{r.buy.length}点・{Math.round(Math.min(...r.buy.map((b) => b.odds)))}倍以上</div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {r.buy.map((b) => (
+          <span key={b.combo} className={cn("flex items-center gap-1 rounded-md border px-1 py-0.5", tri === b.combo && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)]")}>
+            <ComboView combo={b.combo} small /><span className="num text-[10px] text-muted-foreground">{Math.round(b.odds)}倍</span>
+          </span>
+        ))}
+      </div>
+      {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{r.result?.trifectaPay ? <>（3連単 {r.result.trifectaPay.toLocaleString()}円）{hit ? <span className="ml-1 font-semibold text-[hsl(var(--chart-2))]">1点1,000円で{yen(r.result.trifectaPay * UNIT)}</span> : null}</> : null}</div> : null}
+      <div className="mt-2 text-[10px] text-muted-foreground">発表 {jstHm(r.at)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
+    </div>
+  );
+}
+
+function NeraiSection() {
+  const { data, isLoading } = useQuery<MResp>({ queryKey: ["/api/manshu"], refetchInterval: 60_000 });
+  const t = data?.all.total; const inv = (t?.inv ?? 0) * UNIT, ret = (t?.ret ?? 0) * UNIT; const roi = inv ? ret / inv : 0;
+  const xs = data?.races ?? []; const live = xs.filter((r) => !r.result?.trifecta); const done = xs.filter((r) => r.result?.trifecta).reverse();
+  return (
+    <section className="space-y-3" data-testid="nerai">
+      <div>
+        <div className="flex items-baseline gap-2"><span className="rounded-md bg-[hsl(var(--chart-4)/0.15)] px-2 py-0.5 text-xs font-bold text-[hsl(var(--chart-4))]">狙い</span><h2 className="text-base font-bold">中穴〜万舟を20点で</h2></div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">50倍以上の目が来そうだとAIが強く見ているレースだけ（1日4〜5レースほど）、50倍以上の3連単をAIの確率順に20点。締切8分前のオッズで決めて発表し、そのあと変えません。</p>
+      </div>
+      {t && t.n > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label="的中率" value={`${Math.round((t.hit / t.n) * 100)}%`} sub={`${t.hit}/${t.n}レース`} />
+          <Stat label="回収率" value={`${Math.round(roi * 100)}%`} tone={roi >= 1 ? "good" : "bad"} />
+          <Stat label="収支" value={`${ret - inv >= 0 ? "+" : ""}${yen(ret - inv)}`} tone={ret - inv >= 0 ? "good" : "bad"} />
+          <Stat label="購入 / 払戻" value={yen(inv)} sub={`払戻 ${yen(ret)}`} />
+        </div>
+      ) : (
+        <div className="rounded-xl border bg-card p-3 text-xs leading-relaxed text-muted-foreground">11/11から記録を始めます。参考までに、過去（6〜10月・約2万レース）の検証では的中率22%・回収率106%でした（実際の成績ではありません）。</div>
+      )}
+      {isLoading ? <Skeleton className="h-28 w-full rounded-2xl" /> : xs.length === 0 ? (
+        <div className="rounded-2xl border bg-card p-5 text-center text-sm text-muted-foreground">締切8分前に判定し、対象になったレースだけここに出ます。{data ? `本日はここまで${data.judged}レースを判定し、対象は0レースです。` : ""}</div>
+      ) : (
+        <div className="space-y-3">
+          {live.map((r) => <NeraiCard key={`${r.jcd}-${r.rno}`} r={r} hd={data!.hd} />)}
+          {done.length > 0 && <div className="pt-1 text-xs font-semibold text-muted-foreground">終わったレース</div>}
+          {done.map((r) => <NeraiCard key={`${r.jcd}-${r.rno}`} r={r} hd={data!.hd} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function TeppanPage() {
   const { dark, setDark } = useTheme();
   const { data, isLoading } = useQuery<TResp>({ queryKey: ["/api/teppan"], refetchInterval: 60_000 });
@@ -85,7 +148,7 @@ export default function TeppanPage() {
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-2 px-4">
           <Logo className="h-7 w-7" />
           <span className="font-bold">競艇AIラボ</span>
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">本日の鉄板</span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">本日の勝負レース</span>
           <button onClick={() => setDark(!dark)} className="ml-auto rounded-lg p-2 hover:bg-muted" aria-label="表示切替" data-testid="teppan-theme">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
         </div>
       </header>
@@ -93,15 +156,22 @@ export default function TeppanPage() {
       <main className="mx-auto max-w-2xl space-y-6 px-4 pb-16 pt-6">
         <section>
           <div className="text-xs font-semibold text-primary">現在 無料公開中</div>
-          <h1 className="mt-1 text-2xl font-bold leading-snug">AIが自信を持てたレースだけ。<br />3連単を1〜2点で。</h1>
+          <h1 className="mt-1 text-2xl font-bold leading-snug">本日の勝負レース</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            全国のレースをAIが朝に分析し、自信度90以上のレースから、当たる確率が20%以上ある3連単だけを出します。対象がない日は無理に出しません。予想は朝に確定し、あとから変えません。外れも含めて全部の成績を載せています。
+            全国のレースをAIが分析し、自信のあるレースだけを出します。少ない点数で堅く取る「本命」と、点数をかけて高配当を取りにいく「狙い」の2本立てです。予想は決めたあと変えず、外れも含めて全部の成績を載せています。
           </p>
         </section>
 
-        <section className="space-y-2" data-testid="teppan-record">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <a href="#honmei" onClick={(e) => { e.preventDefault(); document.getElementById("honmei")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-primary">本命</div><div className="mt-0.5 text-muted-foreground">1日2〜4R・1〜2点・朝に確定{data ? `・本日${data.races.length}R` : ""}</div></a>
+          <a href="#nerai" onClick={(e) => { e.preventDefault(); document.getElementById("nerai")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-4))]">狙い</div><div className="mt-0.5 text-muted-foreground">1日4〜5R・20点・締切8分前に発表</div></a>
+        </div>
+
+        <section id="honmei" className="space-y-2 scroll-mt-16" data-testid="teppan-record">
+          <div className="flex items-baseline gap-2"><span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">本命</span><h2 className="text-base font-bold">堅いレースを1〜2点で</h2></div>
+          <p className="text-xs leading-relaxed text-muted-foreground">AIの自信度が90以上のレースから、当たる確率が20%以上ある3連単だけ。対象がない日は無理に出しません。朝に確定し、あとから変えません。</p>
           <div className="flex items-baseline gap-2">
-            <h2 className="text-base font-bold">これまでの成績</h2>
+            <h3 className="text-sm font-bold">本命のこれまでの成績</h3>
             <span className="text-xs text-muted-foreground">{data?.record.from ? `${hdLabel(data.record.from)}から・1点1,000円で計算` : ""}</span>
           </div>
           {isLoading || !t ? <Skeleton className="h-24 w-full rounded-xl" /> : (
@@ -119,7 +189,7 @@ export default function TeppanPage() {
 
         <section className="space-y-3">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-base font-bold">本日の鉄板{data ? `（${hdLabel(data.hd)}）` : ""}</h2>
+            <h3 className="text-sm font-bold">本日の本命{data ? `（${hdLabel(data.hd)}）` : ""}</h3>
             <span className="text-xs text-muted-foreground">{data?.createdAt ? `朝の予想確定 ${jstHm(data.createdAt)}` : ""}</span>
           </div>
           {isLoading ? <Skeleton className="h-40 w-full rounded-2xl" /> : data && data.races.length === 0 ? (
@@ -135,7 +205,7 @@ export default function TeppanPage() {
 
         {data && data.recentHits.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-base font-bold">最近の的中</h2>
+            <h3 className="text-sm font-bold">本命の最近の的中</h3>
             <div className="divide-y rounded-2xl border bg-card">
               {data.recentHits.map((h) => (
                 <div key={`${h.hd}-${h.jcd}-${h.rno}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
@@ -152,7 +222,7 @@ export default function TeppanPage() {
 
         {days.length > 0 && (
           <section className="space-y-2" data-testid="teppan-days">
-            <h2 className="text-base font-bold">日別の成績（外れも全部）</h2>
+            <h3 className="text-sm font-bold">本命の日別の成績（外れも全部）</h3>
             <div className="overflow-hidden rounded-2xl border bg-card">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 text-[11px] text-muted-foreground">
@@ -173,9 +243,11 @@ export default function TeppanPage() {
           </section>
         )}
 
+        <div id="nerai" className="scroll-mt-16 border-t pt-6"><NeraiSection /></div>
+
         <section className="grid gap-2 sm:grid-cols-3">
           {[
-            { icon: Clock, h: "朝に確定", b: "予想は朝に決まり、締切まで変えません。確定時刻も表示しています。" },
+            { icon: Clock, h: "決めたら変えない", b: "本命は朝、狙いは締切8分前に決まり、そのあと変えません。決めた時刻も表示しています。" },
             { icon: ListChecks, h: "外れも公開", b: "都合のいいレースだけ見せることはしません。全レースの結果を載せています。" },
             { icon: ShieldCheck, h: "出さない日もある", b: "AIの自信が足りない日は、無理に予想を出しません。" },
           ].map((x) => (
