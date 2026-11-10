@@ -72,6 +72,7 @@ type PickSummary = {
   exEv?: Analysis["exEv"];
   triEv?: Analysis["triEv"];
   himo?: Himo | null;
+  h2c?: string[] | null;
 };
 // 今節好調の紐: 朝のAIで1号艇1着率80%以上のレースで、今節3走以上・平均着順2.5以内の選手（2〜6号艇）を2・3着に
 type Himo = { lanes: { lane: number; n: number; avg: number }[]; picks: string[] };
@@ -89,11 +90,17 @@ const honOf = (a: Analysis) => {
   const qu = Array.from(q.entries()).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([combo, prob]) => ({ combo, prob }));
   return fav ? { fav: fav.lane, favProb: fav.winProb, qu } : null;
 };
+// 頭2艇の中穴候補: 朝のAIで1号艇1着率が低いレースだけ、頭2艇（1号艇以外の1着率上位2艇）から始まる3連単をAIの確率順に10点
+const h2cOf = (a: Analysis): string[] | null => {
+  const e1 = a.entries.find((e) => e.lane === 1); if (!e1 || a.entries.length < 6 || e1.winProb > 0.25) return null;
+  const heads = a.entries.filter((e) => e.lane !== 1).sort((x, y) => y.winProb - x.winProb).slice(0, 2).map((e) => e.lane);
+  return a.trifecta.filter((c) => heads.includes(+c.combo[0])).sort((x, y) => (y.modelProb ?? y.prob) - (x.modelProb ?? x.prob)).slice(0, 10).map((c) => c.combo);
+};
 const summarize = (a: Analysis): PickSummary => ({
   hd: a.hd, jcd: a.jcd, venue: a.venue, rno: a.rno, raceTitle: a.raceTitle, deadline: a.deadline,
   confidence: a.confidence, confidenceLabel: a.confidenceLabel,
   entries: a.entries.map((e) => ({ lane: e.lane, name: e.name, cls: e.cls, mark: e.mark, winProb: e.winProb, tags: e.tags.slice(0, 3).map((t) => t.label) })),
-  hon: honOf(a), exEv: a.exEv ?? [], triEv: a.triEv ?? [], himo: himoOf(a),
+  hon: honOf(a), exEv: a.exEv ?? [], triEv: a.triEv ?? [], himo: himoOf(a), h2c: h2cOf(a),
   main: a.main, value: a.value, comment: a.comment, betTips: a.betTips, distortions: a.distortions, manshu: a.manshu, chuana: a.chuana, oddsAvailable: a.oddsAvailable, beforeAvailable: a.beforeAvailable,
 });
 
@@ -278,7 +285,7 @@ async function tenjiTick() {
 setInterval(() => B.runBg(tenjiTick).catch(() => {}), 60_000);
 // 頭2艇: 朝の予想（固定）の1着率を使う
 setPfSource((hd, jcd, rno) => { const it = loadPlan(hd)?.items.find((x) => x.jcd === jcd && x.rno === rno); if (!it) return null; return { pf: [1, 2, 3, 4, 5, 6].map((l) => it.entries.find((e) => e.lane === l)?.winProb ?? null), names: [1, 2, 3, 4, 5, 6].map((l) => it.entries.find((e) => e.lane === l)?.name ?? "") }; });
-setPlanSource((hd) => { const p = loadPlan(hd); if (!p) return null; return p.items.map((it) => ({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, addedAt: it.addedAt, entries: it.entries.map((e) => ({ lane: e.lane, name: e.name, winProb: e.winProb })) })); });
+setPlanSource((hd) => { const p = loadPlan(hd); if (!p) return null; return p.items.map((it) => ({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, addedAt: it.addedAt, h2c: it.h2c ?? null, entries: it.entries.map((e) => ({ lane: e.lane, name: e.name, winProb: e.winProb })) })); });
 setInterval(() => B.runBg(head2Tick).catch(() => {}), 2 * 60_000);
 setTimeout(() => B.runBg(tenjiTick).catch(() => {}), 5_000);
 function tenjiAll() {

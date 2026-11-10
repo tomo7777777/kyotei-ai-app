@@ -16,7 +16,10 @@ export type Head2Rec = {
   heads: { lane: number; name: string; p: number; pmkt: number }[];
   firstSeen: string; lastSeen: string; mode?: "live" | "morning";
   result?: { first: number | null; second: number | null; trifecta: string | null; trifectaPay: number | null } | null;
+  cands?: string[]; // 朝に決めた中穴候補10点（頭2艇から始まる3連単）
+  bet?: { at: string; odds: Record<string, number>; buy: string[] } | null; // 締切前のオッズで決めた買い目（30倍以上）
 };
+export const BET_MIN_ODDS = 30;
 const cache: Record<string, Head2Rec[]> = {};
 export function isHead2Race(hd: string, jcd: string, rno: number) { return loadH2(hd).some((x) => x.sel && x.jcd === jcd && x.rno === rno); }
 export function loadH2(hd: string): Head2Rec[] {
@@ -88,7 +91,7 @@ async function evalRace(hd: string, jcd: string, rno: number) {
 // 10/17からは朝の予想（固定）だけで選ぶ: 朝のAIで1号艇の1着率が21%以下のレース（全場）で、1号艇以外で1着率が高い2艇
 // 検証（6〜10月・全場999レース）: 1号艇が負け85%、頭2艇のどちらかが1着63.5%（締切直前のオッズで選ぶ方式とほぼ同じ）
 export const MORNING_FROM = "20261017"; const TH_M = 0.21;
-type PlanRace = { jcd: string; venue: string; rno: number; deadline: string | null; addedAt: string; entries: { lane: number; name: string; winProb: number }[] };
+type PlanRace = { jcd: string; venue: string; rno: number; deadline: string | null; addedAt: string; h2c?: string[] | null; entries: { lane: number; name: string; winProb: number }[] };
 let planOf: (hd: string) => PlanRace[] | null = () => null;
 export function setPlanSource(f: typeof planOf) { planOf = f; }
 export function morningBuild(hd: string, xs: Head2Rec[]) {
@@ -100,7 +103,7 @@ export function morningBuild(hd: string, xs: Head2Rec[]) {
     if (!(ah < hd || (ah === hd && a.getUTCHours() * 60 + a.getUTCMinutes() < dl))) continue; // 締切前に決まっていた予想だけ
     const e1 = it.entries.find((e) => e.lane === 1); if (!e1 || it.entries.length < 6 || e1.winProb > TH_M) continue;
     const heads = it.entries.filter((e) => e.lane !== 1).sort((a, b) => b.winProb - a.winProb).slice(0, 2).map((e) => ({ lane: e.lane, name: e.name, p: e.winProb, pmkt: -1 }));
-    xs.push({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, sel: true, p1: e1.winProb, p1mkt: -1, ratio: -1, heads, firstSeen: it.addedAt, lastSeen: it.addedAt, mode: "morning" }); ch = true;
+    xs.push({ jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, sel: true, p1: e1.winProb, p1mkt: -1, ratio: -1, heads, firstSeen: it.addedAt, lastSeen: it.addedAt, mode: "morning", ...(it.h2c?.length ? { cands: it.h2c } : {}) }); ch = true;
   }
   return ch;
 }
@@ -114,6 +117,13 @@ export async function head2Tick() {
       ch = morningBuild(hd, xs);
       // 朝の頭2艇に出したレースだけ、6場以外でも船足（オリジナル展示）を展示の後に取りに行く（予想は変えない）
       for (const x of xs) { const m = toMin(x.deadline || ""); if (m === null || ORI_V[x.jcd] || now < m - 25 || now > m + 60) continue; await grabOne(x.jcd, hd, x.rno, now > m + 30).catch(() => false); }
+      // 中穴の買い目: 締切8分前〜1分前のオッズで、朝の候補10点のうち30倍以上だけを買い目に固定（一度決めたら変えない）
+      for (const x of xs) {
+        const m = toMin(x.deadline || ""); if (m === null || !x.cands?.length || x.bet || m - now > 8 || m - now < 1) continue;
+        const o = await B.getOdds3t(x.jcd, x.rno, hd).catch(() => ({} as Record<string, number>)); if (!Object.keys(o).length) continue;
+        const odds: Record<string, number> = {}; for (const c of x.cands) if (o[c]) odds[c] = o[c];
+        x.bet = { at: new Date().toISOString(), odds, buy: x.cands.filter((c) => (o[c] ?? 0) >= BET_MIN_ODDS) }; ch = true;
+      }
     }
     const venues = hd >= MORNING_FROM ? [] : (await B.getVenues(hd).catch(() => [] as any[])).filter((v: any) => ORI_V[v.jcd]);
     for (const v of venues) {
@@ -173,6 +183,11 @@ function stats(xs: Head2Rec[]) {
   for (const x of xs) { if (!x.sel || !x.result?.first) continue; n++; const hs = x.heads.map((h) => h.lane); hit += hs.includes(x.result.first) ? 1 : 0; both += x.result.second && hs.includes(x.result.first) && hs.includes(x.result.second) ? 1 : 0; lose1 += x.result.first !== 1 ? 1 : 0; }
   return { n, hit, both, lose1 };
 }
+function betStats(xs: Head2Rec[]) {
+  let n = 0, hit = 0, pts = 0, ret = 0;
+  for (const x of xs) { if (!x.sel || !x.bet || !x.result?.trifecta) continue; n++; pts += x.bet.buy.length; if (x.bet.buy.includes(x.result.trifecta)) { hit++; ret += x.result.trifectaPay ?? 0; } }
+  return { n, hit, pts, inv: pts * 100, ret };
+}
 export function head2Resp(hd: string) {
   const xs = loadH2(hd).filter((x) => x.sel).sort((a, b) => (toMin(a.deadline || "") ?? 0) - (toMin(b.deadline || "") ?? 0));
   const files = fs.readdirSync(DIR).filter((f) => /^\d{8}\.json$/.test(f)).sort();
@@ -182,5 +197,5 @@ export function head2Resp(hd: string) {
   const days = hd >= MORNING_FROM ? allDays.filter((d) => d.hd >= MORNING_FROM) : liveDays;
   const total = days.reduce((a, d) => ({ n: a.n + d.n, hit: a.hit + d.hit, both: a.both + d.both, lose1: a.lose1 + d.lose1 }), { n: 0, hit: 0, both: 0, lose1: 0 });
   const retro = loadRetro(hd).map((x) => ({ ...x, sel: x.ratio < M.threshold })).filter((x) => x.sel).sort((a, b) => (toMin(a.deadline || "") ?? 0) - (toMin(b.deadline || "") ?? 0));
-  return { hd, mode: hd >= MORNING_FROM ? "morning" : "live", morningFrom: MORNING_FROM, threshold: M.threshold, venues: ORI_V, races: xs, today: stats(xs), all: { days, total }, allLive: hd >= MORNING_FROM ? allLive : null, retro, retroStat: stats(retro) };
+  return { hd, mode: hd >= MORNING_FROM ? "morning" : "live", morningFrom: MORNING_FROM, threshold: M.threshold, venues: ORI_V, races: xs, today: stats(xs), all: { days, total }, allLive: hd >= MORNING_FROM ? allLive : null, retro, retroStat: stats(retro), betMin: BET_MIN_ODDS, betToday: betStats(xs), betAll: (() => { const ds = files.map((f) => ({ hd: f.slice(0, 8), ...betStats(loadH2(f.slice(0, 8))) })).filter((d) => d.n > 0); return { days: ds, total: ds.reduce((a, d) => ({ n: a.n + d.n, hit: a.hit + d.hit, pts: a.pts + d.pts, inv: a.inv + d.inv, ret: a.ret + d.ret }), { n: 0, hit: 0, pts: 0, inv: 0, ret: 0 }) }; })() };
 }
