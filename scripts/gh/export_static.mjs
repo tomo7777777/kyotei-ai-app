@@ -21,6 +21,7 @@ await save("/api/picks", "picks.json");
 await save("/api/records", "records.json");
 await save("/api/head2", "head2.json");
 await save("/api/manshu", "manshu.json");
+await save("/api/teppan", "teppan.json");
 await save("/api/tenji", "tenji.json", (d) => ({ ...d, ntfyTopic: null }));
 if (age("backtest.json") > 3600_000) await save("/api/backtest", "backtest.json");
 await save("/api/favorites", "favorites.json", (d) => ({ favorites: d.favorites, appearances: {} }));

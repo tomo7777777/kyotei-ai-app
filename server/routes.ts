@@ -342,6 +342,26 @@ function favAppearances() {
   return out;
 }
 
+// ---------- 販売用「本日の鉄板」: 本命Sで自信度90以上、推奨5点のうち朝の確率20%以上の3連単だけ ----------
+const TEPPAN_CONF = 90, TEPPAN_PROB = 0.2;
+function teppanOf(it: PlanItem) {
+  if (it.tier !== "S" || it.confidence < TEPPAN_CONF) return null;
+  const pk = it.main.slice(0, 5).filter((m) => m.prob >= TEPPAN_PROB);
+  if (!pk.length) return null;
+  const r = it.result?.finished ? it.result : null;
+  return { jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, raceTitle: it.raceTitle, confidence: it.confidence, addedAt: it.addedAt,
+    picks: pk.map((m) => ({ combo: m.combo, prob: Math.round(m.prob * 1000) / 1000 })),
+    result: r ? { trifecta: r.trifecta, trifectaPay: r.trifectaPay } : null, hit: r ? !!r.trifecta && pk.some((m) => m.combo === r.trifecta) : null };
+}
+function teppan() {
+  const today = B.todayHd(); const rec = records().honS90;
+  const day = (hd: string) => { const p = loadPlan(hd); return p ? p.items.map(teppanOf).filter((x): x is NonNullable<ReturnType<typeof teppanOf>> => !!x).sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? "")) : []; };
+  const files = fs.readdirSync(PLAN_DIR).filter((f) => /^\d{8}\.json$/.test(f)).map((f) => f.slice(0, 8)).filter((hd) => hd < today).sort().reverse();
+  const hits: ({ hd: string } & NonNullable<ReturnType<typeof teppanOf>>)[] = [];
+  for (const hd of files) { for (const x of day(hd).reverse()) if (x.hit) hits.push({ hd, ...x }); if (hits.length >= 10) break; }
+  return { hd: today, createdAt: loadPlan(today)?.createdAt ?? null, races: day(today), yesterday: files[0] ? { hd: files[0], races: day(files[0]) } : null, recentHits: hits.slice(0, 10), record: rec };
+}
+
 // ---------- 記録開始からの成績（本命S・好調の紐） ----------
 type RecDay = { hd: string; n: number; hit: number; inv: number; ret: number };
 type RecOut = { from: string | null; days: RecDay[]; total: { n: number; hit: number; inv: number; ret: number }; pending: number };
@@ -621,6 +641,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.get("/api/manshu", (req, res) => { try { res.json(manshuResp(String(req.query.hd || B.todayHd()))); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/head2", (req, res) => { try { B.runBg(() => head2Retro(String(req.query.hd || B.todayHd()))).catch(() => {}); res.json(head2Resp(String(req.query.hd || B.todayHd()))); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
+  app.get("/api/teppan", (_req, res) => { try { res.json(teppan()); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/records", (_req, res) => { try { res.json(records()); } catch (e: any) { res.status(500).json({ message: e?.message }); } });
   app.get("/api/picks", async (req, res) => {
     const hd = String(req.query.hd || B.todayHd());

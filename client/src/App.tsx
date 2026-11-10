@@ -13,6 +13,7 @@ import { VenueList, RaceDetail } from "@/pages/race";
 import MyPage from "@/pages/my";
 import RacerPage from "@/pages/racer";
 import BacktestPage from "@/pages/backtest";
+import TeppanPage from "@/pages/teppan";
 
 function AppRouter() {
   return (
@@ -39,9 +40,14 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router hook={useHashLocation}>
-          <Shell>
-            <AppRouter />
-          </Shell>
+          <Switch>
+            <Route path="/teppan" component={TeppanPage} />
+            <Route>
+              <Shell>
+                <AppRouter />
+              </Shell>
+            </Route>
+          </Switch>
         </Router>
       </TooltipProvider>
     </QueryClientProvider>
