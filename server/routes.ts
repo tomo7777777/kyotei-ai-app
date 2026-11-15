@@ -409,6 +409,8 @@ function updatePlan(hd: string, ranked: PickSummary[]) {
   const now = new Date().toISOString();
   let plan = loadPlan(hd); let changed = false;
   if (!plan && ranked.length === 0) return;
+  // 朝の予想は5時以降に作る（前のアプリと同じ時刻。深夜0時台だと前日の結果が成績に入りきらない可能性がある）
+  if (!plan && hd === B.todayHd() && jstNowMin(hd) < 5 * 60) return;
   if (!plan) { plan = { hd, createdAt: now, items: [] }; changed = true; }
   const have = new Set(plan.items.map((i) => `${i.jcd}-${i.rno}`));
   for (const p of ranked) {
