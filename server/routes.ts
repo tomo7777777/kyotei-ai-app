@@ -353,20 +353,20 @@ function teppanOf(it: PlanItem) {
     picks: pk.map((m) => ({ combo: m.combo, prob: Math.round(m.prob * 1000) / 1000 })),
     result: r ? { trifecta: r.trifecta, trifectaPay: r.trifectaPay } : null, hit: r ? !!r.trifecta && pk.some((m) => m.combo === r.trifecta) : null };
 }
-// ---------- 的中重視: 本命Sで自信度90以上のレースを、朝のAIの確率順に18点（鉄板の条件とは別に記録） ----------
-// 過去（6〜10月・約2万レース）の検証で的中率84〜91%、11/11〜11/20の実戦で85%（回収率は約80〜100%）
-export const HIT_N = 18;
+// ---------- 的中重視: 本命Sで自信度90以上のレースを、朝のAIの確率順に16点（鉄板の条件とは別に記録） ----------
+// 過去（6〜10月・約2万レース）の検証で的中率81〜87%、11/11〜11/20の実戦で85%。保存は18点、使うのは上位16点
+export const HIT_N = 16;
 const HIT_DIR = path.resolve("data/hit18"); fs.mkdirSync(HIT_DIR, { recursive: true });
 const hitCache: Record<string, Record<string, string[]>> = {};
 const loadHit = (hd: string) => (hitCache[hd] ??= (() => { try { return JSON.parse(fs.readFileSync(path.join(HIT_DIR, `${hd}.json`), "utf8")); } catch { return {}; } })());
 function hitPicks(hd: string, it: PlanItem): string[] | null {
   if (it.tier !== "S" || it.confidence < 90) return null;
   const d = loadHit(hd); const k = `${it.jcd}-${it.rno}`;
-  if (d[k]) return d[k];
+  if (d[k]) return d[k].slice(0, HIT_N);
   const mp = getMorningP(hd, it.jcd, it.rno); if (!mp || Object.keys(mp).length < 60) return null;
-  d[k] = Object.keys(mp).sort((a, b) => mp[b] - mp[a]).slice(0, HIT_N);
+  d[k] = Object.keys(mp).sort((a, b) => mp[b] - mp[a]).slice(0, 18);
   fs.writeFileSync(path.join(HIT_DIR, `${hd}.json`), JSON.stringify(d));
-  return d[k];
+  return d[k].slice(0, HIT_N);
 }
 function hitOf(hd: string, it: PlanItem) {
   const pk = hitPicks(hd, it); if (!pk) return null;

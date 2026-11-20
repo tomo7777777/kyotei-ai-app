@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Moon, Sun, ShieldCheck, Clock, ListChecks, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { Moon, Sun, ShieldCheck, Clock, ListChecks, TriangleAlert, Copy, Check } from "lucide-react";
 import { Logo, ComboView, useTheme, hdLabel } from "@/components/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,24 @@ const yen = (v: number) => `${v < 0 ? "-" : ""}${Math.abs(Math.round(v)).toLocal
 const jstHm = (iso: string | null) => { if (!iso) return "—"; const d = new Date(new Date(iso).getTime() + 9 * 3600_000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`; };
 const nowHm = () => { const d = new Date(Date.now() + 9 * 3600_000); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
 const toM = (t: string | null) => (t ? parseInt(t.slice(0, 2)) * 60 + parseInt(t.slice(3, 5)) : 0);
+
+const pretty = (c: string) => (c.includes("-") ? c : c.split("").join("-"));
+async function copyText(t: string) {
+  try { await navigator.clipboard.writeText(t); return true; } catch {
+    const a = document.createElement("textarea"); a.value = t; a.style.position = "fixed"; a.style.opacity = "0"; document.body.appendChild(a); a.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch { ok = false; } a.remove(); return ok;
+  }
+}
+function CopyBtn({ text, label = "予想をコピー" }: { text: string; label?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button type="button" onClick={async () => { if (await copyText(text)) { setDone(true); setTimeout(() => setDone(false), 1500); } }}
+      className={cn("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold", done ? "border-[hsl(var(--chart-2))] text-[hsl(var(--chart-2))]" : "text-foreground hover-elevate")} data-testid="copy-btn">
+      {done ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}{done ? "コピーしました" : label}
+    </button>
+  );
+}
+const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...combos.map(pretty)].join("\n");
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
   return (
@@ -70,7 +89,7 @@ function RaceCard({ r, hd, live }: { r: TRace; hd: string; live?: boolean }) {
           {r.result.trifectaPay ? <>（3連単 {r.result.trifectaPay.toLocaleString()}円）{r.hit ? <span className="ml-1 font-semibold text-[hsl(var(--chart-2))]">1,000円が{yen(r.result.trifectaPay * UNIT)}</span> : null}</> : null}
         </div>
       ) : null}
-      <div className="mt-2 text-[10px] text-muted-foreground">予想確定 {jstHm(r.addedAt)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>予想確定 {jstHm(r.addedAt)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={raceText(r.venue, r.rno, r.deadline, `本命 3連単${r.picks.length}点`, r.picks.map((p) => p.combo))} /></span></div>
     </div>
   );
 }
@@ -93,7 +112,7 @@ function KataCard({ r, hd }: { r: KRace; hd: string }) {
         {r.picks.map((c) => <span key={c} className={cn("rounded-md border px-1 py-0.5", tri === c && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)]")}><ComboView combo={c} small /></span>)}
       </div>
       {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{pay ? <>（3連単 {pay.toLocaleString()}円）{r.hit ? <span className={cn("ml-1 font-semibold", pay >= cost ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>1点100円で{yen(cost)}買って{yen(pay)}</span> : null}</> : null}</div> : null}
-      <div className="mt-2 text-[10px] text-muted-foreground">予想確定 {jstHm(r.addedAt)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>予想確定 {jstHm(r.addedAt)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={raceText(r.venue, r.rno, r.deadline, `的中重視 3連単${r.picks.length}点`, r.picks)} /></span></div>
     </div>
   );
 }
@@ -106,7 +125,7 @@ function KataSection({ data }: { data: TResp }) {
     <section className="space-y-3" data-testid="kata">
       <div>
         <div className="flex items-baseline gap-2"><span className="rounded-md bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 text-xs font-bold text-[hsl(var(--chart-2))]">的中重視</span><h2 className="text-base font-bold">当てることを優先して{k.n}点</h2></div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率84〜91%、11/11〜11/20の実際のレースでは85%でした。点数が多いので、当たっても払戻が購入額より少ないことがよくあります。</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率81〜87%、11/11〜11/20の実際のレースでは85%でした。点数が多いので、当たっても払戻が購入額より少ないことがよくあります。</p>
       </div>
       {t.n > 0 ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -151,7 +170,7 @@ function NeraiCard({ r, hd }: { r: MRec; hd: string }) {
         ))}
       </div>
       {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{r.result?.trifectaPay ? <>（3連単 {r.result.trifectaPay.toLocaleString()}円）{hit ? <span className="ml-1 font-semibold text-[hsl(var(--chart-2))]">1点1,000円で{yen(r.result.trifectaPay * UNIT)}</span> : null}</> : null}</div> : null}
-      <div className="mt-2 text-[10px] text-muted-foreground">発表 {jstHm(r.at)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>発表 {jstHm(r.at)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={raceText(r.venue, r.rno, r.deadline, `狙い 3連単${r.buy.length}点`, r.buy.map((b) => b.combo))} /></span></div>
     </div>
   );
 }
@@ -220,7 +239,7 @@ export default function TeppanPage() {
 
         <div className="grid grid-cols-3 gap-2 text-xs">
           <a href="#honmei" onClick={(e) => { e.preventDefault(); document.getElementById("honmei")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-primary">本命</div><div className="mt-0.5 text-muted-foreground">1日2〜4R・1〜2点・朝に確定{data ? `・本日${data.races.length}R` : ""}</div></a>
-          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・18点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
+          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・16点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
           <a href="#nerai" onClick={(e) => { e.preventDefault(); document.getElementById("nerai")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-4))]">狙い</div><div className="mt-0.5 text-muted-foreground">1日4〜5R・20点・締切8分前に発表</div></a>
         </div>
 
