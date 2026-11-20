@@ -24,6 +24,7 @@ const save = (hd: string) => fs.writeFileSync(path.join(DIR, `${hd}.json`), JSON
 // 朝のAIの3連単確率（120通り）を日ごとに保存（プランに入れたときの値で固定）
 const mpCache: Record<string, Record<string, Record<string, number>>> = {};
 const loadMp = (hd: string) => (mpCache[hd] ??= (() => { try { return JSON.parse(fs.readFileSync(path.join(MP_DIR, `${hd}.json`), "utf8")); } catch { return {}; } })());
+export function getMorningP(hd: string, jcd: string, rno: number): Record<string, number> | null { return loadMp(hd)[`${jcd}-${rno}`] ?? null; }
 export function putMorningP(hd: string, jcd: string, rno: number, mp: Record<string, number>) {
   const d = loadMp(hd); const k = `${jcd}-${rno}`; if (d[k]) return;
   d[k] = mp; fs.writeFileSync(path.join(MP_DIR, `${hd}.json`), JSON.stringify(d));

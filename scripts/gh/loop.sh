@@ -24,7 +24,7 @@ echo "server: $(curl -s localhost:5000/api/meta)"; echo "ml: $(curl -s -o /dev/n
 publish() {
   rm -rf $PUB.new; mkdir -p $PUB.new/state/backtest $PUB.new/state/data
   cp -r /tmp/site/. $PUB.new/; cp -r $OUT/api $PUB.new/ 2>/dev/null; touch $PUB.new/.nojekyll
-  for d in plans oddslog oddslate exev triev tenji head2 oriten manshu; do [ -d data/$d ] && cp -r data/$d $PUB.new/state/data/; done
+  for d in plans oddslog oddslate hit18 exev triev tenji head2 oriten manshu; do [ -d data/$d ] && cp -r data/$d $PUB.new/state/data/; done
   mkdir -p $PUB.new/state/data/mp; find data/mp -name "*.json" -mtime -3 -exec cp {} $PUB.new/state/data/mp/ \; 2>/dev/null
   cp data/favorites.json $PUB.new/state/data/ 2>/dev/null
   mkdir -p $PUB.new/state/data/anacache; find data/anacache -name "*.json" -mtime -2 -exec cp {} $PUB.new/state/data/anacache/ \; 2>/dev/null

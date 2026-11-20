@@ -19,7 +19,9 @@ type TResp = {
   yesterday: { hd: string; races: TRace[] } | null;
   recentHits: ({ hd: string } & TRace)[];
   record: { from: string | null; days: RecDay[]; total: { n: number; hit: number; inv: number; ret: number } };
+  kata?: { n: number; races: KRace[]; record: { from: string | null; days: RecDay[]; total: { n: number; hit: number; inv: number; ret: number } } };
 };
+type KRace = Omit<TRace, "picks"> & { picks: string[] };
 
 const UNIT = 10; // 1点1,000円（記録は100円単位）
 const yen = (v: number) => `${v < 0 ? "-" : ""}${Math.abs(Math.round(v)).toLocaleString()}円`;
@@ -70,6 +72,60 @@ function RaceCard({ r, hd, live }: { r: TRace; hd: string; live?: boolean }) {
       ) : null}
       <div className="mt-2 text-[10px] text-muted-foreground">予想確定 {jstHm(r.addedAt)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
     </div>
+  );
+}
+
+function KataCard({ r, hd }: { r: KRace; hd: string }) {
+  const tri = r.result?.trifecta; const left = toM(r.deadline) - nowHm();
+  const pay = r.result?.trifectaPay ?? 0; const cost = r.picks.length * 100;
+  return (
+    <div className={cn("rounded-2xl border bg-card p-4", r.hit && "border-[hsl(var(--chart-2))]")} data-testid={`kata-${r.jcd}-${r.rno}`}>
+      <div className="flex items-baseline gap-2">
+        <span className="text-lg font-bold">{r.venue} {r.rno}R</span>
+        <span className="num text-sm text-muted-foreground">締切 {r.deadline ?? "—"}</span>
+        <span className="ml-auto text-xs">
+          {tri ? (r.hit ? <span className="rounded-full bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 font-bold text-[hsl(var(--chart-2))]">的中</span> : <span className="rounded-full bg-muted px-2 py-0.5 text-muted-foreground">不的中</span>)
+            : left > 0 ? <span className="num rounded-full bg-primary/10 px-2 py-0.5 font-semibold text-primary">あと{left >= 60 ? `${Math.floor(left / 60)}時間${left % 60}分` : `${left}分`}</span> : <span className="text-muted-foreground">結果待ち</span>}
+        </span>
+      </div>
+      <div className="mt-0.5 truncate text-xs text-muted-foreground">3連単{r.picks.length}点・AI自信度 <span className="num font-semibold text-foreground">{r.confidence}</span></div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {r.picks.map((c) => <span key={c} className={cn("rounded-md border px-1 py-0.5", tri === c && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)]")}><ComboView combo={c} small /></span>)}
+      </div>
+      {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{pay ? <>（3連単 {pay.toLocaleString()}円）{r.hit ? <span className={cn("ml-1 font-semibold", pay >= cost ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>1点100円で{yen(cost)}買って{yen(pay)}</span> : null}</> : null}</div> : null}
+      <div className="mt-2 text-[10px] text-muted-foreground">予想確定 {jstHm(r.addedAt)}<Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="ml-2 underline">レース詳細</Link></div>
+    </div>
+  );
+}
+
+function KataSection({ data }: { data: TResp }) {
+  const k = data.kata; if (!k) return null;
+  const t = k.record.total; const inv = t.inv, ret = t.ret; const roi = inv ? ret / inv : 0;
+  const live = k.races.filter((r) => !r.result); const done = k.races.filter((r) => r.result);
+  return (
+    <section className="space-y-3" data-testid="kata">
+      <div>
+        <div className="flex items-baseline gap-2"><span className="rounded-md bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 text-xs font-bold text-[hsl(var(--chart-2))]">的中重視</span><h2 className="text-base font-bold">当てることを優先して{k.n}点</h2></div>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率84〜91%、11/11〜11/20の実際のレースでは85%でした。点数が多いので、当たっても払戻が購入額より少ないことがよくあります。</p>
+      </div>
+      {t.n > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat label="的中率" value={`${Math.round((t.hit / t.n) * 100)}%`} sub={`${t.hit}/${t.n}レース`} />
+          <Stat label="回収率" value={`${Math.round(roi * 100)}%`} tone={roi >= 1 ? "good" : "bad"} />
+          <Stat label="収支" value={`${ret - inv >= 0 ? "+" : ""}${yen(ret - inv)}`} tone={ret - inv >= 0 ? "good" : "bad"} sub="1点100円" />
+          <Stat label="購入 / 払戻" value={yen(inv)} sub={`払戻 ${yen(ret)}`} />
+        </div>
+      ) : null}
+      {k.races.length === 0 ? (
+        <div className="rounded-2xl border bg-card p-5 text-center text-sm text-muted-foreground">本日は条件に合うレースがありません。</div>
+      ) : (
+        <div className="space-y-3">
+          {live.map((r) => <KataCard key={`${r.jcd}-${r.rno}`} r={r} hd={data.hd} />)}
+          {done.length > 0 && <div className="pt-1 text-xs font-semibold text-muted-foreground">終わったレース</div>}
+          {done.map((r) => <KataCard key={`${r.jcd}-${r.rno}`} r={r} hd={data.hd} />)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -158,12 +214,13 @@ export default function TeppanPage() {
           <div className="text-xs font-semibold text-primary">現在 無料公開中</div>
           <h1 className="mt-1 text-2xl font-bold leading-snug">本日の勝負レース</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            全国のレースをAIが分析し、自信のあるレースだけを出します。少ない点数で堅く取る「本命」と、点数をかけて高配当を取りにいく「狙い」の2本立てです。予想は決めたあと変えず、外れも含めて全部の成績を載せています。
+            全国のレースをAIが分析し、自信のあるレースだけを出します。少ない点数で堅く取る「本命」、点数を増やして当てることを優先する「的中重視」、高配当を取りにいく「狙い」の3本立てです。予想は決めたあと変えず、外れも含めて全部の成績を載せています。
           </p>
         </section>
 
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-xs">
           <a href="#honmei" onClick={(e) => { e.preventDefault(); document.getElementById("honmei")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-primary">本命</div><div className="mt-0.5 text-muted-foreground">1日2〜4R・1〜2点・朝に確定{data ? `・本日${data.races.length}R` : ""}</div></a>
+          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・18点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
           <a href="#nerai" onClick={(e) => { e.preventDefault(); document.getElementById("nerai")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-4))]">狙い</div><div className="mt-0.5 text-muted-foreground">1日4〜5R・20点・締切8分前に発表</div></a>
         </div>
 
@@ -242,6 +299,8 @@ export default function TeppanPage() {
             </div>
           </section>
         )}
+
+        {data?.kata ? <div id="kata" className="scroll-mt-16 border-t pt-6"><KataSection data={data} /></div> : null}
 
         <div id="nerai" className="scroll-mt-16 border-t pt-6"><NeraiSection /></div>
 

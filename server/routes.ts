@@ -7,7 +7,7 @@ import { storage } from "./storage";
 import * as B from "./boatrace";
 import { analyze, jstNowMin, toMin, type Analysis } from "./model";
 import { oriTick, getAshi, getVenueAshi, ORI_V } from "./oriten";
-import { manshuTick, manshuResp, putMorningP, setManPlanSource } from "./manshu";
+import { manshuTick, manshuResp, putMorningP, getMorningP, setManPlanSource } from "./manshu";
 import { head2Tick, head2Resp, setPfSource, head2Retro, setPlanSource, isHead2Race, loadH2 } from "./head2";
 setInterval(() => B.runBg(oriTick).catch(() => {}), 3 * 60_000);
 setTimeout(() => B.runBg(oriTick).catch(() => {}), 20_000);
@@ -353,13 +353,36 @@ function teppanOf(it: PlanItem) {
     picks: pk.map((m) => ({ combo: m.combo, prob: Math.round(m.prob * 1000) / 1000 })),
     result: r ? { trifecta: r.trifecta, trifectaPay: r.trifectaPay } : null, hit: r ? !!r.trifecta && pk.some((m) => m.combo === r.trifecta) : null };
 }
+// ---------- 的中重視: 本命Sで自信度90以上のレースを、朝のAIの確率順に18点（鉄板の条件とは別に記録） ----------
+// 過去（6〜10月・約2万レース）の検証で的中率84〜91%、11/11〜11/20の実戦で85%（回収率は約80〜100%）
+export const HIT_N = 18;
+const HIT_DIR = path.resolve("data/hit18"); fs.mkdirSync(HIT_DIR, { recursive: true });
+const hitCache: Record<string, Record<string, string[]>> = {};
+const loadHit = (hd: string) => (hitCache[hd] ??= (() => { try { return JSON.parse(fs.readFileSync(path.join(HIT_DIR, `${hd}.json`), "utf8")); } catch { return {}; } })());
+function hitPicks(hd: string, it: PlanItem): string[] | null {
+  if (it.tier !== "S" || it.confidence < 90) return null;
+  const d = loadHit(hd); const k = `${it.jcd}-${it.rno}`;
+  if (d[k]) return d[k];
+  const mp = getMorningP(hd, it.jcd, it.rno); if (!mp || Object.keys(mp).length < 60) return null;
+  d[k] = Object.keys(mp).sort((a, b) => mp[b] - mp[a]).slice(0, HIT_N);
+  fs.writeFileSync(path.join(HIT_DIR, `${hd}.json`), JSON.stringify(d));
+  return d[k];
+}
+function hitOf(hd: string, it: PlanItem) {
+  const pk = hitPicks(hd, it); if (!pk) return null;
+  const r = it.result?.finished ? it.result : null;
+  return { jcd: it.jcd, venue: it.venue, rno: it.rno, deadline: it.deadline, raceTitle: it.raceTitle, confidence: it.confidence, addedAt: it.addedAt, picks: pk,
+    result: r ? { trifecta: r.trifecta, trifectaPay: r.trifectaPay } : null, hit: r ? !!r.trifecta && pk.includes(r.trifecta) : null };
+}
 function teppan() {
-  const today = B.todayHd(); const rec = records().honS90;
+  const today = B.todayHd(); const allRec = records(); const rec = allRec.honS90;
   const day = (hd: string) => { const p = loadPlan(hd); return p ? p.items.map(teppanOf).filter((x): x is NonNullable<ReturnType<typeof teppanOf>> => !!x).sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? "")) : []; };
   const files = fs.readdirSync(PLAN_DIR).filter((f) => /^\d{8}\.json$/.test(f)).map((f) => f.slice(0, 8)).filter((hd) => hd < today).sort().reverse();
   const hits: ({ hd: string } & NonNullable<ReturnType<typeof teppanOf>>)[] = [];
   for (const hd of files) { for (const x of day(hd).reverse()) if (x.hit) hits.push({ hd, ...x }); if (hits.length >= 10) break; }
-  return { hd: today, createdAt: loadPlan(today)?.createdAt ?? null, races: day(today), yesterday: files[0] ? { hd: files[0], races: day(files[0]) } : null, recentHits: hits.slice(0, 10), record: rec };
+  const tp = loadPlan(today);
+  const kata = { n: HIT_N, races: tp ? tp.items.map((it) => hitOf(today, it)).filter((x): x is NonNullable<ReturnType<typeof hitOf>> => !!x).sort((a, b) => (a.deadline ?? "").localeCompare(b.deadline ?? "")) : [], record: allRec.hit18 };
+  return { hd: today, createdAt: tp?.createdAt ?? null, races: day(today), yesterday: files[0] ? { hd: files[0], races: day(files[0]) } : null, recentHits: hits.slice(0, 10), record: rec, kata };
 }
 
 // ---------- 記録開始からの成績（本命S・好調の紐） ----------
@@ -370,7 +393,7 @@ function records() {
   const files = fs.readdirSync(PLAN_DIR).filter((f) => /^\d{8}\.json$/.test(f)).map((f) => f.slice(0, 8)).sort();
   const today = B.todayHd();
   const mk = (): RecOut => ({ from: null, days: [], total: { n: 0, hit: 0, inv: 0, ret: 0 }, pending: 0 });
-  const out = { honS: mk(), himo: mk(), honS90: mk(), honS90all: mk() };
+  const out = { honS: mk(), himo: mk(), honS90: mk(), honS90all: mk(), hit18: mk() };
   const missing: { hd: string; it: PlanItem }[] = [];
   for (const hd of files) {
     const p = loadPlan(hd); if (!p) continue;
@@ -390,9 +413,10 @@ function records() {
       // 本命Sで自信度90以上のレースの、推奨5点のうち確率20%以上の目だけ
       if (it.tier === "S" && it.confidence >= 90) add(out.honS90all, it, it.main.slice(0, 5).map((m) => m.combo));
       if (it.tier === "S" && it.confidence >= 90) { const pk = it.main.slice(0, 5).filter((m) => m.prob >= 0.2).map((m) => m.combo); if (pk.length) add(out.honS90, it, pk); }
+      { const hp = hitPicks(hd, it); if (hp) add(out.hit18, it, hp); }
     }
   }
-  for (const o of [out.honS, out.himo, out.honS90, out.honS90all]) for (const d of o.days) { o.total.n += d.n; o.total.hit += d.hit; o.total.inv += d.inv; o.total.ret += d.ret; }
+  for (const o of [out.honS, out.himo, out.honS90, out.honS90all, out.hit18]) for (const d of o.days) { o.total.n += d.n; o.total.hit += d.hit; o.total.inv += d.inv; o.total.ret += d.ret; }
   // 結果が入っていない過去のレースは裏で取りに行く
   if (missing.length && !recFillBusy) {
     recFillBusy = true;
