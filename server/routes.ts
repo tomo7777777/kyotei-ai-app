@@ -562,6 +562,41 @@ async function logTick() {
   } catch {} finally { logRunning = false; }
 }
 setInterval(() => B.runBg(logTick), 60_000);
+
+// ---------- 締切直前と確定後のオッズ記録（検証用。予想・成績には使わない） ----------
+// stage 1 = 締切90秒前〜30秒前、stage 0 = 締切30秒前〜締切、stage -1 = 締切10〜40分後（確定オッズ）
+const LATE_DIR = path.resolve("data/oddslate");
+fs.mkdirSync(LATE_DIR, { recursive: true });
+const lateLogged = new Set<string>();
+for (const f of fs.readdirSync(LATE_DIR)) for (const line of fs.readFileSync(path.join(LATE_DIR, f), "utf8").split("\n")) {
+  if (!line) continue; try { const d = JSON.parse(line); lateLogged.add(`${d.hd}-${d.jcd}-${d.rno}-${d.stage}`); } catch {}
+}
+let lateRunning = false;
+async function lateTick() {
+  if (lateRunning) return; lateRunning = true;
+  try {
+    const hd = B.todayHd(); const nowSec = jstNowMin(hd) * 60 + new Date().getUTCSeconds();
+    const venues = await venuesWithSchedule(hd);
+    const due: { jcd: string; rno: number; deadline: string; stage: number; left: number }[] = [];
+    for (const v of venues) v.deadlines.forEach((d, i) => {
+      const m = d ? toMin(d) : null; if (m === null) return;
+      const left = m * 60 - nowSec; const rno = i + 1;
+      const st = left <= 90 && left > 30 ? 1 : left <= 30 && left > 0 ? 0 : left <= -600 && left > -2400 ? -1 : null;
+      if (st !== null && !lateLogged.has(`${hd}-${v.jcd}-${rno}-${st}`)) due.push({ jcd: v.jcd, rno, deadline: d!, stage: st, left });
+    });
+    await Promise.all(due.map(async (t) => {
+      try {
+        const ttl = t.stage >= 0 ? 3_000 : 60_000;
+        const [odds3, tan] = await Promise.all([B.getOdds3t(t.jcd, t.rno, hd, ttl), B.getOddsTan(t.jcd, t.rno, hd, ttl).catch(() => ({}))]);
+        if (Object.keys(odds3).length < 60) return;
+        const rec = { hd, jcd: t.jcd, rno: t.rno, deadline: t.deadline, stage: t.stage, secLeft: t.left, at: new Date().toISOString(), odds3, tan };
+        fs.appendFileSync(path.join(LATE_DIR, `${hd}.jsonl`), JSON.stringify(rec) + "\n");
+        lateLogged.add(`${hd}-${t.jcd}-${t.rno}-${t.stage}`);
+      } catch {}
+    }));
+  } catch {} finally { lateRunning = false; }
+}
+setInterval(() => B.runBg(lateTick), 15_000);
 export function oddsLogStats() {
   const files = fs.readdirSync(LOG_DIR).filter((f) => f.endsWith(".jsonl")).sort();
   const seen = new Set<string>();

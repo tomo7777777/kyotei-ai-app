@@ -48,7 +48,7 @@ function release(bg: boolean) {
 
 export async function fetchHtml(url: string, ttlMs: number): Promise<string> {
   const c = htmlCache.get(url);
-  if (c && Date.now() - c.at < c.ttl) return c.body;
+  if (c && Date.now() - c.at < Math.min(c.ttl, ttlMs)) return c.body;
   if (ttlMs >= 3600_000) {
     const d = diskGet(url, ttlMs);
     if (d) { htmlCache.set(url, { at: Date.now(), ttl: ttlMs, body: d }); return d; }
@@ -258,8 +258,8 @@ export async function getDeadlines(jcd: string, hd: string): Promise<(string | n
 }
 
 // ---------- odds ----------
-export async function getOdds3t(jcd: string, rno: number, hd: string): Promise<Record<string, number>> {
-  const html = await fetchHtml(`${BASE}/race/odds3t?rno=${rno}&jcd=${jcd}&hd=${hd}`, 60_000);
+export async function getOdds3t(jcd: string, rno: number, hd: string, ttlMs = 60_000): Promise<Record<string, number>> {
+  const html = await fetchHtml(`${BASE}/race/odds3t?rno=${rno}&jcd=${jcd}&hd=${hd}`, ttlMs);
   const $ = cheerio.load(html);
   const out: Record<string, number> = {};
   const table = $("div.table1 table").eq(1);
@@ -313,8 +313,8 @@ export async function getOdds2f(jcd: string, rno: number, hd: string): Promise<R
   });
   return out;
 }
-export async function getOddsTan(jcd: string, rno: number, hd: string): Promise<Record<string, number>> {
-  const html = await fetchHtml(`${BASE}/race/oddstf?rno=${rno}&jcd=${jcd}&hd=${hd}`, 60_000);
+export async function getOddsTan(jcd: string, rno: number, hd: string, ttlMs = 60_000): Promise<Record<string, number>> {
+  const html = await fetchHtml(`${BASE}/race/oddstf?rno=${rno}&jcd=${jcd}&hd=${hd}`, ttlMs);
   const $ = cheerio.load(html);
   const out: Record<string, number> = {};
   $("div.table1 table").eq(1).find("tbody tr").each((_, tr) => {
