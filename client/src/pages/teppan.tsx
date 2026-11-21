@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useState } from "react";
 import { Moon, Sun, ShieldCheck, Clock, ListChecks, TriangleAlert, Copy, Check } from "lucide-react";
-import { Logo, ComboView, useTheme, hdLabel } from "@/components/shell";
+import { Logo, ComboView, Boat, useTheme, hdLabel } from "@/components/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,32 @@ function CopyBtn({ text, label = "予想をコピー" }: { text: string; label?:
     </button>
   );
 }
-const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...combos.map(pretty)].join("\n");
+// 1着・2着が同じ目をまとめる（例: 1-2-3 と 1-2-4 → 1-2-34）
+type Form = { a: string; b: string; c: string[] };
+function groupForm(combos: string[]): Form[] {
+  const m = new Map<string, Form>();
+  for (const x of combos) { const [a, b, c] = pretty(x).split("-"); const k = `${a}-${b}`; if (!m.has(k)) m.set(k, { a, b, c: [] }); m.get(k)!.c.push(c); }
+  return Array.from(m.values()).map((f) => ({ ...f, c: f.c.sort() })).sort((x, y) => (x.a + x.b).localeCompare(y.a + y.b));
+}
+const formText = (f: Form) => `${f.a}-${f.b}-${f.c.join("")}`;
+function FormRows({ combos, hit }: { combos: string[]; hit?: string | null }) {
+  const h = hit ? pretty(hit).split("-") : null;
+  return (
+    <div className="mt-2 space-y-1">
+      {groupForm(combos).map((f) => {
+        const on = !!h && h[0] === f.a && h[1] === f.b && f.c.includes(h[2]);
+        return (
+          <div key={f.a + f.b} className={cn("flex items-center gap-1 rounded-lg border px-2 py-1.5", on && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)]")}>
+            <Boat n={f.a} small /><span className="text-xs text-muted-foreground">-</span><Boat n={f.b} small /><span className="text-xs text-muted-foreground">-</span>
+            <span className="inline-flex flex-wrap items-center gap-0.5">{f.c.map((c) => <Boat key={c} n={c} small />)}</span>
+            <span className="num ml-auto text-[11px] text-muted-foreground">{f.c.length}点</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...groupForm(combos).map(formText)].join("\n");
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
   return (
@@ -108,9 +133,7 @@ function KataCard({ r, hd }: { r: KRace; hd: string }) {
         </span>
       </div>
       <div className="mt-0.5 truncate text-xs text-muted-foreground">3連単{r.picks.length}点・AI自信度 <span className="num font-semibold text-foreground">{r.confidence}</span></div>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {r.picks.map((c) => <span key={c} className={cn("rounded-md border px-1 py-0.5", tri === c && "border-[hsl(var(--chart-2))] bg-[hsl(var(--chart-2)/0.12)]")}><ComboView combo={c} small /></span>)}
-      </div>
+      <FormRows combos={r.picks} hit={tri} />
       {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{pay ? <>（3連単 {pay.toLocaleString()}円）{r.hit ? <span className={cn("ml-1 font-semibold", pay >= cost ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>1点100円で{yen(cost)}買って{yen(pay)}</span> : null}</> : null}</div> : null}
       <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>予想確定 {jstHm(r.addedAt)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={raceText(r.venue, r.rno, r.deadline, `的中重視 3連単${r.picks.length}点`, r.picks)} /></span></div>
     </div>
