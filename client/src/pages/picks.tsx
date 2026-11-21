@@ -936,7 +936,7 @@ export default function PicksPage() {
       </div></div>
       <Link href="/teppan" className="flex items-center gap-3 rounded-xl border border-[hsl(var(--chart-2)/0.5)] bg-[hsl(var(--chart-2)/0.08)] px-4 py-3 hover-elevate" data-testid="link-teppan">
         <Trophy className="h-5 w-5 shrink-0 text-[hsl(var(--chart-2))]" />
-        <span className="min-w-0"><span className="block text-sm font-bold">本日の勝負レース</span><span className="block text-xs text-muted-foreground">的中重視10点・鉄板の予想をコピーできます</span></span>
+        <span className="min-w-0"><span className="block text-sm font-bold">本日の勝負レース</span><span className="block text-xs text-muted-foreground">的中重視16点・鉄板の予想をコピーできます</span></span>
         <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-muted-foreground" />
       </Link>
       <TenjiAlert nowHm={nowHm} toM={toM} onOpen={() => setMode("tenji")} />
