@@ -353,9 +353,9 @@ function teppanOf(it: PlanItem) {
     picks: pk.map((m) => ({ combo: m.combo, prob: Math.round(m.prob * 1000) / 1000 })),
     result: r ? { trifecta: r.trifecta, trifectaPay: r.trifectaPay } : null, hit: r ? !!r.trifecta && pk.some((m) => m.combo === r.trifecta) : null };
 }
-// ---------- 的中重視: 本命Sで自信度90以上のレースを、朝のAIの確率順に16点（鉄板の条件とは別に記録） ----------
-// 過去（6〜10月・約2万レース）の検証で的中率81〜87%、11/11〜11/20の実戦で85%。保存は18点、使うのは上位16点
-export const HIT_N = 16;
+// ---------- 的中重視: 本命Sで自信度90以上のレースを、朝のAIの確率順に10点（鉄板の条件とは別に記録） ----------
+// 過去（6〜10月・約2万レース）の検証で的中率70〜78%、11/11〜11/21の実戦で63%。保存は18点、使うのは上位10点（上位3点が本線、残り7点が抑え）
+export const HIT_N = 10;
 const HIT_DIR = path.resolve("data/hit18"); fs.mkdirSync(HIT_DIR, { recursive: true });
 const hitCache: Record<string, Record<string, string[]>> = {};
 const loadHit = (hd: string) => (hitCache[hd] ??= (() => { try { return JSON.parse(fs.readFileSync(path.join(HIT_DIR, `${hd}.json`), "utf8")); } catch { return {}; } })());

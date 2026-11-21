@@ -57,7 +57,7 @@ const formText = (f: Form) => `${f.a}-${f.b}-${f.c.join("")}`;
 function FormRows({ combos, hit }: { combos: string[]; hit?: string | null }) {
   const h = hit ? pretty(hit).split("-") : null;
   return (
-    <div className="mt-2 space-y-1">
+    <div className="mt-1 space-y-1">
       {groupForm(combos).map((f) => {
         const on = !!h && h[0] === f.a && h[1] === f.b && f.c.includes(h[2]);
         return (
@@ -71,7 +71,9 @@ function FormRows({ combos, hit }: { combos: string[]; hit?: string | null }) {
     </div>
   );
 }
+const HON = 3; // 本線の点数（AIの確率上位）
 const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...groupForm(combos).map(formText)].join("\n");
+const kataText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, `本線（${Math.min(HON, combos.length)}点）`, ...groupForm(combos.slice(0, HON)).map(formText), ...(combos.length > HON ? [`抑え（${combos.length - HON}点）`, ...groupForm(combos.slice(HON)).map(formText)] : [])].join("\n");
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
   return (
@@ -133,9 +135,11 @@ function KataCard({ r, hd }: { r: KRace; hd: string }) {
         </span>
       </div>
       <div className="mt-0.5 truncate text-xs text-muted-foreground">3連単{r.picks.length}点・AI自信度 <span className="num font-semibold text-foreground">{r.confidence}</span></div>
-      <FormRows combos={r.picks} hit={tri} />
+      <div className="mt-2 text-[11px] font-bold text-[hsl(var(--chart-2))]">本線 {Math.min(HON, r.picks.length)}点</div>
+      <FormRows combos={r.picks.slice(0, HON)} hit={tri} />
+      {r.picks.length > HON ? <><div className="mt-2 text-[11px] font-bold text-muted-foreground">抑え {r.picks.length - HON}点</div><FormRows combos={r.picks.slice(HON)} hit={tri} /></> : null}
       {tri ? <div className="mt-2 text-xs text-muted-foreground">結果 <span className="num font-semibold text-foreground">{tri}</span>{pay ? <>（3連単 {pay.toLocaleString()}円）{r.hit ? <span className={cn("ml-1 font-semibold", pay >= cost ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>1点100円で{yen(cost)}買って{yen(pay)}</span> : null}</> : null}</div> : null}
-      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>予想確定 {jstHm(r.addedAt)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={raceText(r.venue, r.rno, r.deadline, `的中重視 3連単${r.picks.length}点`, r.picks)} /></span></div>
+      <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground"><span>予想確定 {jstHm(r.addedAt)}</span><Link href={`/race/${hd}/${r.jcd}/${r.rno}`} className="underline">レース詳細</Link><span className="ml-auto"><CopyBtn text={kataText(r.venue, r.rno, r.deadline, `的中重視 3連単${r.picks.length}点`, r.picks)} /></span></div>
     </div>
   );
 }
@@ -148,7 +152,7 @@ function KataSection({ data }: { data: TResp }) {
     <section className="space-y-3" data-testid="kata">
       <div>
         <div className="flex items-baseline gap-2"><span className="rounded-md bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 text-xs font-bold text-[hsl(var(--chart-2))]">的中重視</span><h2 className="text-base font-bold">当てることを優先して{k.n}点</h2></div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率81〜87%、11/11〜11/20の実際のレースでは85%でした。点数が多いので、当たっても払戻が購入額より少ないことがよくあります。</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。上位{HON}点が本線、残りが抑えです。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率70〜78%、11/11〜11/21の実際のレースでは63%でした（16点のときは85%）。当たっても払戻が購入額より少ないことがよくあります。</p>
       </div>
       {t.n > 0 ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -262,7 +266,7 @@ export default function TeppanPage() {
 
         <div className="grid grid-cols-3 gap-2 text-xs">
           <a href="#honmei" onClick={(e) => { e.preventDefault(); document.getElementById("honmei")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-primary">本命</div><div className="mt-0.5 text-muted-foreground">1日2〜4R・1〜2点・朝に確定{data ? `・本日${data.races.length}R` : ""}</div></a>
-          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・16点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
+          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・10点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
           <a href="#nerai" onClick={(e) => { e.preventDefault(); document.getElementById("nerai")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-4))]">狙い</div><div className="mt-0.5 text-muted-foreground">1日4〜5R・20点・締切8分前に発表</div></a>
         </div>
 
