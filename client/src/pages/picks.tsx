@@ -934,6 +934,11 @@ export default function PicksPage() {
             className={cn("whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-semibold transition-colors sm:px-3 sm:text-sm", mode === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{l}</button>
         ))}
       </div></div>
+      <Link href="/teppan" className="flex items-center gap-3 rounded-xl border border-[hsl(var(--chart-2)/0.5)] bg-[hsl(var(--chart-2)/0.08)] px-4 py-3 hover-elevate" data-testid="link-teppan">
+        <Trophy className="h-5 w-5 shrink-0 text-[hsl(var(--chart-2))]" />
+        <span className="min-w-0"><span className="block text-sm font-bold">本日の勝負レース</span><span className="block text-xs text-muted-foreground">的中重視16点・鉄板の予想をコピーできます</span></span>
+        <ChevronRight className="ml-auto h-5 w-5 shrink-0 text-muted-foreground" />
+      </Link>
       <TenjiAlert nowHm={nowHm} toM={toM} onOpen={() => setMode("tenji")} />
       <SoonBanner items={items} nowHm={nowHm} toM={toM} />
       {mode === "man" ? <ManView nowHm={nowHm} toM={toM} /> : mode === "head2" ? <Head2View nowHm={nowHm} toM={toM} /> : mode === "tenji" ? <TenjiView nowHm={nowHm} toM={toM} /> : mode === "exev" ? <ExView ex={data?.exev} nowHm={nowHm} toM={toM} /> : mode === "chuana" ? <ExView tri ex={data?.triev} nowHm={nowHm} toM={toM} /> : mode === "both" ? <BothView items={items} nowHm={nowHm} toM={toM} madeAt={madeAt} loading={isLoading || (!plan && !!st?.running)} /> : mode !== "honmei" ? <ManshuView key={mode} kind={mode} items={items} nowHm={nowHm} toM={toM} madeAt={madeAt} loading={isLoading || (!plan && !!st?.running)} /> : (<>
