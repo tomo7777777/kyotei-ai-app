@@ -91,7 +91,7 @@ function noteText(data: TResp): string {
   L.push("━━━━━━━━━━", "◆本命（3連単1〜2点）", "━━━━━━━━━━");
   if (!hon.length) L.push("本日は対象レースがありません。");
   for (const r of hon) {
-    L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`);
+    L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）`);
     for (const p of r.picks) L.push(pretty(p.combo));
     if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
   }
@@ -99,7 +99,7 @@ function noteText(data: TResp): string {
     L.push("", "━━━━━━━━━━", `◆的中重視（3連単${k.n}点）`, "━━━━━━━━━━");
     if (!kat.length) L.push("本日は対象レースがありません。");
     for (const r of kat) {
-      L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`, ...kataLines(r.picks));
+      L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）`, ...kataLines(r.picks));
       if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
     }
   }
