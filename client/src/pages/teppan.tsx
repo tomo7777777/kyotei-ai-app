@@ -77,7 +77,9 @@ function FormRows({ combos, hit, prob }: { combos: string[]; hit?: string | null
 }
 const HON = 3; // 本線の点数（AIの確率上位）
 const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...groupForm(combos).map(formText)].join("\n");
-const kataText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, `本線（${Math.min(HON, combos.length)}点）`, ...groupForm(combos.slice(0, HON)).map(formText), ...(combos.length > HON ? [`抑え（${combos.length - HON}点）`, ...groupForm(combos.slice(HON)).map(formText)] : [])].join("\n");
+const honLine = (combos: string[]) => `（本線 ${combos.slice(0, HON).map(pretty).join("、")}）`;
+const kataLines = (combos: string[]) => [...groupForm(combos).map(formText), honLine(combos)];
+const kataText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...kataLines(combos)].join("\n");
 
 const pctI = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
 function noteText(data: TResp): string {
@@ -90,21 +92,16 @@ function noteText(data: TResp): string {
   if (!hon.length) L.push("本日は対象レースがありません。");
   for (const r of hon) {
     L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`);
-    for (const p of r.picks) L.push(`${pretty(p.combo)}（AI確率${Math.round(p.prob * 100)}%）`);
+    for (const p of r.picks) L.push(pretty(p.combo));
     if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
   }
   if (k) {
     L.push("", "━━━━━━━━━━", `◆的中重視（3連単${k.n}点）`, "━━━━━━━━━━");
     if (!kat.length) L.push("本日は対象レースがありません。");
     for (const r of kat) {
-      const pm = r.probs ? Object.fromEntries(r.picks.map((c, i) => [pretty(c), r.probs![i] ?? null])) : {};
-      const line = (f: Form) => `${formText(f)}（${f.c.map((c) => pctS(pm[`${f.a}-${f.b}-${c}`] ?? null)).join("・")}）`;
-      L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`);
-      L.push(`本線（${Math.min(HON, r.picks.length)}点）`, ...groupForm(r.picks.slice(0, HON)).map(line));
-      if (r.picks.length > HON) L.push(`抑え（${r.picks.length - HON}点）`, ...groupForm(r.picks.slice(HON)).map(line));
+      L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`, ...kataLines(r.picks));
       if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
     }
-    L.push("", "※かっこ内はその目のAIの確率です。");
   }
   const t = data.record.total; const kt = k?.record.total;
   L.push("", "━━━━━━━━━━", "◆これまでの成績（1点100円で計算）", "━━━━━━━━━━");
