@@ -79,6 +79,41 @@ const HON = 3; // 本線の点数（AIの確率上位）
 const raceText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, ...groupForm(combos).map(formText)].join("\n");
 const kataText = (venue: string, rno: number, deadline: string | null, head: string, combos: string[]) => [`${venue}${rno}R（締切${deadline ?? "—"}）`, head, `本線（${Math.min(HON, combos.length)}点）`, ...groupForm(combos.slice(0, HON)).map(formText), ...(combos.length > HON ? [`抑え（${combos.length - HON}点）`, ...groupForm(combos.slice(HON)).map(formText)] : [])].join("\n");
 
+const pctI = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
+function noteText(data: TResp): string {
+  const L: string[] = []; const hd = hdLabel(data.hd);
+  const k = data.kata; const open = (x: { result: unknown }) => !x.result;
+  const hon = data.races.filter(open).length ? data.races.filter(open) : data.races;
+  const kat = k ? (k.races.filter(open).length ? k.races.filter(open) : k.races) : [];
+  L.push(`【${hd} 競艇AI 本日の勝負レース】`, "", "全国のレースをAIが分析し、自信のあるレースだけを選んでいます。予想は朝に確定し、あとから変えません。", "");
+  L.push("━━━━━━━━━━", "◆本命（3連単1〜2点）", "━━━━━━━━━━");
+  if (!hon.length) L.push("本日は対象レースがありません。");
+  for (const r of hon) {
+    L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`);
+    for (const p of r.picks) L.push(`${pretty(p.combo)}（AI確率${Math.round(p.prob * 100)}%）`);
+    if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
+  }
+  if (k) {
+    L.push("", "━━━━━━━━━━", `◆的中重視（3連単${k.n}点）`, "━━━━━━━━━━");
+    if (!kat.length) L.push("本日は対象レースがありません。");
+    for (const r of kat) {
+      const pm = r.probs ? Object.fromEntries(r.picks.map((c, i) => [pretty(c), r.probs![i] ?? null])) : {};
+      const line = (f: Form) => `${formText(f)}（${f.c.map((c) => pctS(pm[`${f.a}-${f.b}-${c}`] ?? null)).join("・")}）`;
+      L.push("", `■${r.venue}${r.rno}R（締切${r.deadline ?? "—"}）AI自信度${r.confidence}`);
+      L.push(`本線（${Math.min(HON, r.picks.length)}点）`, ...groupForm(r.picks.slice(0, HON)).map(line));
+      if (r.picks.length > HON) L.push(`抑え（${r.picks.length - HON}点）`, ...groupForm(r.picks.slice(HON)).map(line));
+      if (r.result?.trifecta) L.push(`結果 ${r.result.trifecta}${r.hit ? ` 的中 ${(r.result.trifectaPay ?? 0).toLocaleString()}円` : " 不的中"}`);
+    }
+    L.push("", "※かっこ内はその目のAIの確率です。");
+  }
+  const t = data.record.total; const kt = k?.record.total;
+  L.push("", "━━━━━━━━━━", "◆これまでの成績（1点100円で計算）", "━━━━━━━━━━");
+  L.push(`本命 ${data.record.from ? hdLabel(data.record.from) + "から " : ""}${t.hit}/${t.n}レース的中（${pctI(t.hit, t.n)}）回収率${pctI(t.ret, t.inv)}`);
+  if (k && kt) L.push(`的中重視 ${k.record.from ? hdLabel(k.record.from) + "から " : ""}${kt.hit}/${kt.n}レース的中（${pctI(kt.hit, kt.n)}）回収率${pctI(kt.ret, kt.inv)}`);
+  L.push("", "※過去の成績は今後の的中や利益を約束するものではありません。舟券の購入はご自身の判断でお願いします。");
+  return L.join("\n");
+}
+
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
   return (
     <div className="rounded-xl border bg-card px-3 py-3 text-center">
@@ -157,7 +192,7 @@ function KataSection({ data }: { data: TResp }) {
     <section className="space-y-3" data-testid="kata">
       <div>
         <div className="flex items-baseline gap-2"><span className="rounded-md bg-[hsl(var(--chart-2)/0.15)] px-2 py-0.5 text-xs font-bold text-[hsl(var(--chart-2))]">的中重視</span><h2 className="text-base font-bold">当てることを優先して{k.n}点</h2></div>
-        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。上位{HON}点が本線、残りが抑えです。各艇の下の数字はその目のAIの確率で、低い目を自分で切るときの目安にしてください。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率81〜87%、11/11〜11/21の実際のレースでは85%でした。当たっても払戻が購入額より少ないことがよくあります。</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">本命と同じ自信度90以上のレースを、AIの確率が高い順に3連単{k.n}点。上位{HON}点が本線、残りが抑えです。各艇の下の数字はその目のAIの確率で、低い目を自分で切るときの目安にしてください。朝に確定し、あとから変えません。過去（6〜10月・約2万レース）の検証では的中率71〜78%、11/11〜11/22の実際のレースでは63%でした。当たっても払戻が購入額より少ないことがよくあります。</p>
       </div>
       {t.n > 0 ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -271,9 +306,11 @@ export default function TeppanPage() {
 
         <div className="grid grid-cols-3 gap-2 text-xs">
           <a href="#honmei" onClick={(e) => { e.preventDefault(); document.getElementById("honmei")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-primary">本命</div><div className="mt-0.5 text-muted-foreground">1日2〜4R・1〜2点・朝に確定{data ? `・本日${data.races.length}R` : ""}</div></a>
-          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・16点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
+          <a href="#kata" onClick={(e) => { e.preventDefault(); document.getElementById("kata")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-2))]">的中重視</div><div className="mt-0.5 text-muted-foreground">本命と同じレース・10点{data?.kata ? `・本日${data.kata.races.length}R` : ""}</div></a>
           <a href="#nerai" onClick={(e) => { e.preventDefault(); document.getElementById("nerai")?.scrollIntoView({ behavior: "smooth" }); }} className="rounded-xl border bg-card p-3"><div className="font-bold text-[hsl(var(--chart-4))]">狙い</div><div className="mt-0.5 text-muted-foreground">1日4〜5R・20点・締切8分前に発表</div></a>
         </div>
+
+        {data ? <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2.5" data-testid="note-copy"><div className="min-w-0 text-xs"><div className="font-bold">note用にまとめてコピー</div><div className="text-muted-foreground">本命と的中重視の今日の予想と成績を、noteにそのまま貼れる形で</div></div><span className="ml-auto shrink-0"><CopyBtn text={noteText(data)} label="note用コピー" /></span></div> : null}
 
         <section id="honmei" className="space-y-2 scroll-mt-16" data-testid="teppan-record">
           <div className="flex items-baseline gap-2"><span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">本命</span><h2 className="text-base font-bold">堅いレースを1〜2点で</h2></div>
