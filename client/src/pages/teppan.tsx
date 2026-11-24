@@ -111,6 +111,31 @@ function noteText(data: TResp): string {
   return L.join("\n");
 }
 
+function MonthTable({ days, unit, label }: { days: RecDay[]; unit: number; label: string }) {
+  const m = new Map<string, { n: number; hit: number; inv: number; ret: number }>();
+  for (const d of days) { const k = d.hd.slice(0, 6); const a = m.get(k) ?? { n: 0, hit: 0, inv: 0, ret: 0 }; a.n += d.n; a.hit += d.hit; a.inv += d.inv; a.ret += d.ret; m.set(k, a); }
+  const rows = Array.from(m.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  if (!rows.length) return null;
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card" data-testid="month-table">
+      <div className="border-b px-3 py-2 text-xs font-bold">{label}</div>
+      <table className="w-full text-xs">
+        <thead className="text-[11px] text-muted-foreground"><tr><th className="px-3 py-1.5 text-left font-medium">月</th><th className="px-2 py-1.5 text-right font-medium">的中</th><th className="px-2 py-1.5 text-right font-medium">的中率</th><th className="px-2 py-1.5 text-right font-medium">回収率</th><th className="px-3 py-1.5 text-right font-medium">収支</th></tr></thead>
+        <tbody>
+          {rows.map(([k, a]) => { const r = a.inv ? a.ret / a.inv : 0; const pl = (a.ret - a.inv) * unit; return (
+            <tr key={k} className="border-t">
+              <td className="px-3 py-1.5 font-semibold">{parseInt(k.slice(4, 6))}月{k === rows[0][0] ? <span className="ml-1 text-[10px] font-normal text-muted-foreground">途中</span> : null}</td>
+              <td className="num px-2 py-1.5 text-right">{a.hit}/{a.n}</td>
+              <td className="num px-2 py-1.5 text-right">{a.n ? Math.round((a.hit / a.n) * 100) : 0}%</td>
+              <td className={cn("num px-2 py-1.5 text-right font-semibold", r >= 1 ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>{Math.round(r * 100)}%</td>
+              <td className={cn("num px-3 py-1.5 text-right", pl >= 0 ? "text-[hsl(var(--chart-2))]" : "text-destructive")}>{pl >= 0 ? "+" : ""}{yen(pl)}</td>
+            </tr>); })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "good" | "bad" }) {
   return (
     <div className="rounded-xl border bg-card px-3 py-3 text-center">
@@ -324,6 +349,7 @@ export default function TeppanPage() {
                 <Stat label="収支" value={`${ret - inv >= 0 ? "+" : ""}${yen(ret - inv)}`} tone={ret - inv >= 0 ? "good" : "bad"} />
                 <Stat label="購入 / 払戻" value={yen(inv)} sub={`払戻 ${yen(ret)}`} />
               </div>
+              {data ? <MonthTable days={data.record.days} unit={UNIT} label="月ごとの成績（1点1,000円）" /> : null}
               <p className="text-[11px] text-muted-foreground">朝に確定した予想を、締切前の予想だけで集計しています。過去の成績は今後の的中や利益を約束するものではありません。</p>
             </>
           )}
